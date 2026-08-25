@@ -117,18 +117,10 @@ selected_weight_col = None
 # Sidebar: Input & Configuration
 # ─────────────────────────────────────────────────
 with st.sidebar:
-    # Session UUID header with help icon
-    st.markdown(
-        """
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <h3 style="margin: 0;">Session UUID</h3>
-            <span title="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
-                  style="display: inline-flex; align-items: center; justify-content: center;
-                         width: 18px; height: 18px; border-radius: 50%; border: 1px solid #888;
-                         color: #888; font-size: 12px; font-weight: bold; cursor: help;">?</span>
-        </div>
-        """,
-        unsafe_allow_html=True
+    # Session UUID header with native Streamlit help icon
+    st.subheader(
+        "Session UUID",
+        help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
 
     # Display current UUID if exists
