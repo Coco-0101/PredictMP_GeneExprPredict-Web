@@ -4,6 +4,7 @@ Upload a genotype.vcf -> predict expression using GA-calibrated weights
 """
 
 import os
+import time
 import streamlit as st
 import tempfile
 from pathlib import Path
@@ -93,6 +94,12 @@ if "ga_results" not in st.session_state:
     st.session_state.ga_results = None
 if "error" not in st.session_state:
     st.session_state.error = None
+if "upload_seen_key" not in st.session_state:
+    st.session_state.upload_seen_key = None
+if "upload_seen_time" not in st.session_state:
+    st.session_state.upload_seen_time = None
+if "auto_run_done_key" not in st.session_state:
+    st.session_state.auto_run_done_key = None
 
 # ─────────────────────────────────────────────────
 # Get available weights databases
@@ -147,10 +154,25 @@ with st.sidebar:
         accept_multiple_files=False
     )
 
+    # Detect a newly-completed upload (server has fully received the file)
+    # and record the timestamp -- this is the earliest point in the script
+    # where we know the upload finished.
+    if vcf_file is not None:
+        file_key = f"{vcf_file.name}_{vcf_file.size}"
+        if file_key != st.session_state.upload_seen_key:
+            st.session_state.upload_seen_key = file_key
+            st.session_state.upload_seen_time = time.time()
+
     # Auto-generate UUID when file is uploaded (if no UUID exists)
     if vcf_file and not st.session_state.ga_uuid:
         st.session_state.ga_uuid = str(uuid.uuid4())
         st.rerun()
+
+    auto_run = st.checkbox(
+        "Auto-run prediction after upload completes",
+        value=True,
+        help="When enabled, prediction starts automatically as soon as the file finishes uploading -- no need to click Run Prediction"
+    )
 
     st.divider()
     st.subheader("Configuration")
@@ -209,13 +231,28 @@ with st.sidebar:
     st.divider()
 
     # Run Analysis button (disabled if no file selected)
-    run_analysis = st.button(
+    manual_run = st.button(
         "Run Prediction",
         use_container_width=True,
         type="primary",
         disabled=not vcf_file,
         help="Select a VCF file first" if not vcf_file else "Click to start"
     )
+
+# Determine whether to run: either the user clicked the button, or
+# auto-run is enabled and this specific upload hasn't been processed yet.
+current_file_key = st.session_state.upload_seen_key
+should_auto_run = (
+    auto_run
+    and vcf_file is not None
+    and current_file_key is not None
+    and current_file_key != st.session_state.auto_run_done_key
+)
+run_analysis = manual_run or should_auto_run
+
+if run_analysis and vcf_file:
+    # Mark this file as processed so auto-run doesn't re-trigger on every rerun
+    st.session_state.auto_run_done_key = current_file_key
 
 
 # ─────────────────────────────────────────────────
@@ -229,7 +266,14 @@ st.info("Use the sidebar to upload analysis data, select weights configuration, 
 
 # Show status message (hide when running analysis)
 if vcf_file and not run_analysis:
-    st.info(f"VCF file selected: **{vcf_file.name}** ({vcf_file.size / 1024 / 1024:.1f} MB)\n\nClick **Run Prediction** button in the sidebar to start")
+    upload_elapsed = None
+    if st.session_state.upload_seen_time:
+        upload_elapsed = time.time() - st.session_state.upload_seen_time
+    elapsed_note = f" — ready {upload_elapsed:.1f}s ago" if upload_elapsed is not None else ""
+    if auto_run:
+        st.info(f"VCF file selected: **{vcf_file.name}** ({vcf_file.size / 1024 / 1024:.1f} MB){elapsed_note}\n\nAuto-run is enabled — prediction should start automatically. If it doesn't, click **Run Prediction**.")
+    else:
+        st.info(f"VCF file selected: **{vcf_file.name}** ({vcf_file.size / 1024 / 1024:.1f} MB){elapsed_note}\n\nClick **Run Prediction** button in the sidebar to start")
 
 if run_analysis and vcf_file:
     if not selected_weight_db:
@@ -259,9 +303,16 @@ if run_analysis and vcf_file:
 
     # Run prediction
     st.subheader("Processing Progress")
+
+    if st.session_state.upload_seen_time:
+        upload_ready_ago = time.time() - st.session_state.upload_seen_time
+        st.caption(f"File finished uploading {upload_ready_ago:.1f}s before prediction started")
+
     progress_container = st.container()
     status_text = st.empty()
     progress_bar = st.progress(0)
+
+    pipeline_start_time = time.time()
 
     try:
         def update_progress(message: str, pct: int):
@@ -275,7 +326,14 @@ if run_analysis and vcf_file:
             assume_aligned=False,  # Always perform allele check for safety
         )
         progress_bar.progress(1.0)
-        status_text.success("Prediction complete!")
+
+        pipeline_elapsed = time.time() - pipeline_start_time
+        timing_note = f" (prediction took {pipeline_elapsed:.1f}s"
+        if st.session_state.upload_seen_time:
+            total_elapsed = time.time() - st.session_state.upload_seen_time
+            timing_note += f", {total_elapsed:.1f}s total since upload finished"
+        timing_note += ")"
+        status_text.success(f"Prediction complete!{timing_note}")
 
         # Load results
         expr_df, summary_df = load_results(expr_path, summary_path)
