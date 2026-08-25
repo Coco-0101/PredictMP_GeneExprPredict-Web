@@ -348,7 +348,7 @@ if st.session_state.ga_results:
     tabs = st.tabs(["Predicted Expression", "Predicted Summary", "Status Codes"])
 
     with tabs[0]:
-        st.write("**Predicted Expression Matrix** (first 5 rows)")
+        st.write(f"**Predicted Expression Matrix** ({len(expr_df)} samples × {len(expr_df.columns)-2} genes)")
         # Apply column configuration with help tooltips
         col_configs = {}
         for col in expr_df.columns:
@@ -357,24 +357,46 @@ if st.session_state.ga_results:
                     col,
                     help=EXPR_COLUMN_HELP[col]
                 )
-        st.dataframe(expr_df.head(), column_config=col_configs, use_container_width=True)
+        # Display full table (Streamlit handles pagination automatically)
+        st.dataframe(expr_df, column_config=col_configs, use_container_width=True, height=400)
 
-        # Download button for Predicted Expression
+        # Download section for Predicted Expression
         st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            with open(results["expr_path"], "rb") as f:
-                st.download_button(
-                    label="⬇️ Download Predicted Expression (CSV)",
-                    data=f.read(),
-                    file_name=f"predicted_expression_{timestamp}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+        st.write("**Download Options**")
+
+        download_range = st.radio(
+            "Select what to download:",
+            options=["All Data", "Current Page (first 100 rows)"],
+            index=0,
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+        if download_range == "All Data":
+            # Download all data
+            csv_data = expr_df.to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download All Predicted Expression (CSV)",
+                data=csv_data,
+                file_name=f"predicted_expression_all_{timestamp}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            # Download current page (first 100 rows)
+            csv_data = expr_df.head(100).to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download Current Page (first 100 rows)",
+                data=csv_data,
+                file_name=f"predicted_expression_page1_{timestamp}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
     with tabs[1]:
-        st.write("**Gene QC Metrics** (first 10 rows)")
+        st.write(f"**Gene QC Metrics** ({len(summary_df)} genes)")
         display_cols = [
             "gene", "n_snps_in_model", "n_snps_used", "pct_snps_used",
             "pred_mean", "pred_sd", "var_g", "status"
@@ -389,21 +411,44 @@ if st.session_state.ga_results:
                     col,
                     help=QC_COLUMN_HELP[col]
                 )
-        st.dataframe(summary_df[display_cols].head(10), column_config=col_configs, use_container_width=True)
+        # Display full table (Streamlit handles pagination automatically)
+        st.dataframe(summary_df[display_cols], column_config=col_configs, use_container_width=True, height=400)
 
-        # Download button for Predicted Summary
+        # Download section for Predicted Summary
         st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            with open(results["summary_path"], "rb") as f:
-                st.download_button(
-                    label="⬇️ Download Predicted Summary (CSV)",
-                    data=f.read(),
-                    file_name=f"predicted_summary_{timestamp}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+        st.write("**Download Options**")
+
+        download_range = st.radio(
+            "Select what to download:",
+            options=["All Data", "Current Page (first 100 rows)"],
+            index=0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="summary_download_range"
+        )
+
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+        if download_range == "All Data":
+            # Download all data
+            csv_data = summary_df[display_cols].to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download All QC Metrics (CSV)",
+                data=csv_data,
+                file_name=f"predicted_summary_all_{timestamp}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            # Download current page (first 100 rows)
+            csv_data = summary_df[display_cols].head(100).to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download Current Page (first 100 rows)",
+                data=csv_data,
+                file_name=f"predicted_summary_page1_{timestamp}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
     with tabs[2]:
         st.write("**Prediction Status Reference**")
