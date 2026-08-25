@@ -163,38 +163,43 @@ with st.sidebar:
     )
     selected_weight_col = weight_type_values[weight_type_display.index(selected_weight_col)]
 
-    # Sign/Unsigned selector (只在選擇 GA 時顯示)
+    # Sign/Unsigned selector (只在選擇 GA 時顯示，使用邊框 + 縮進表示層級)
     if selected_weight_col == "GA_W":
-        sign_type_display = ["Sign-flipped (推薦)", "Unsigned"]
-        sign_type_values = ["Sign", "Unsign"]
+        # 使用邊框容器顯示子選項
+        with st.container(border=True):
+            st.markdown("##### 📌 LOOCV Weight Type")
 
-        selected_sign_type = st.radio(
-            "LOOCV Weight Type",
-            options=sign_type_display,
-            index=0,
-            help="Sign-flipped: Recommended for most analyses | Unsigned: Alternative option"
-        )
-        selected_sign_type = sign_type_values[sign_type_display.index(selected_sign_type)]
+            sign_type_display = ["Sign-flipped (推薦)", "Unsigned"]
+            sign_type_values = ["Sign", "Unsign"]
 
-        # Build the database filename based on selection
-        weights_dir = os.path.dirname(WEIGHTS_DB)
-        if selected_sign_type == "Sign":
-            db_filename = "V4_LOOCV_Sign_weights.db"
-        else:
-            db_filename = "V4_LOOCV_Unsign_weights.db"
+            selected_sign_type = st.radio(
+                "Select weight type:",
+                options=sign_type_display,
+                index=0,
+                help="Sign-flipped: Recommended for most analyses | Unsigned: Alternative option",
+                label_visibility="collapsed"
+            )
+            selected_sign_type = sign_type_values[sign_type_display.index(selected_sign_type)]
 
-        selected_weight_db = os.path.join(weights_dir, db_filename)
+            # Build the database filename based on selection
+            weights_dir = os.path.dirname(WEIGHTS_DB)
+            if selected_sign_type == "Sign":
+                db_filename = "V4_LOOCV_Sign_weights.db"
+            else:
+                db_filename = "V4_LOOCV_Unsign_weights.db"
 
-        # Display selected database info
-        st.info(f"✓ Using: LOOCV {selected_sign_type} weights database")
+            selected_weight_db = os.path.join(weights_dir, db_filename)
 
-        # Verify database exists
-        if not os.path.exists(selected_weight_db):
-            st.warning(f"⚠️ Database not found: {db_filename}")
-            st.info(f"Available databases: {', '.join(available_dbs) if available_dbs else 'None'}")
+            # Display selected database info
+            st.success(f"✓ Using: LOOCV {selected_sign_type} weights database")
+
+            # Verify database exists
+            if not os.path.exists(selected_weight_db):
+                st.warning(f"⚠️ Database not found: {db_filename}")
+                st.info(f"Available databases: {', '.join(available_dbs) if available_dbs else 'None'}")
     else:
         # For PrediXcan_W, use the built-in database without selection
-        st.info("✓ Using built-in Original PrediXcan Weight database")
+        st.success("✓ Using built-in Original PrediXcan Weight database")
         selected_weight_db = WEIGHTS_DB
 
     st.divider()
