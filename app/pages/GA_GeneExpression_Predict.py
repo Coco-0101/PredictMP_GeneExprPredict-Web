@@ -118,16 +118,18 @@ selected_weight_col = None
 # ─────────────────────────────────────────────────
 with st.sidebar:
     # Session UUID header with help icon
-    col1, col2 = st.columns([0.95, 0.05])
-    with col1:
-        st.subheader("Session UUID")
-    with col2:
-        st.write("")
-        st.write("")
-        st.markdown(
-            '<span title="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results" style="cursor: help; font-size: 18px;">ⓘ</span>',
-            unsafe_allow_html=True
-        )
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <h3 style="margin: 0;">Session UUID</h3>
+            <span title="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
+                  style="display: inline-flex; align-items: center; justify-content: center;
+                         width: 18px; height: 18px; border-radius: 50%; border: 1px solid #888;
+                         color: #888; font-size: 12px; font-weight: bold; cursor: help;">?</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Display current UUID if exists
     if st.session_state.ga_uuid:
