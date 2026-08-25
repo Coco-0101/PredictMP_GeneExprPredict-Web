@@ -117,7 +117,17 @@ selected_weight_col = None
 # Sidebar: Input & Configuration
 # ─────────────────────────────────────────────────
 with st.sidebar:
-    st.subheader("Session UUID")
+    # Session UUID header with help icon
+    col1, col2 = st.columns([0.95, 0.05])
+    with col1:
+        st.subheader("Session UUID")
+    with col2:
+        st.write("")
+        st.write("")
+        st.markdown(
+            '<span title="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results" style="cursor: help; font-size: 18px;">ⓘ</span>',
+            unsafe_allow_html=True
+        )
 
     # Display current UUID if exists
     if st.session_state.ga_uuid:
@@ -126,8 +136,7 @@ with st.sidebar:
     uuid_input = st.text_input(
         "UUID",
         placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        label_visibility="collapsed",
-        help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
+        label_visibility="collapsed"
     )
 
     if st.button("Load UUID", use_container_width=True):
