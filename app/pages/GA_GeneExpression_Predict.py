@@ -359,6 +359,20 @@ if st.session_state.ga_results:
                 )
         st.dataframe(expr_df.head(), column_config=col_configs, use_container_width=True)
 
+        # Download button for Predicted Expression
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            with open(results["expr_path"], "rb") as f:
+                st.download_button(
+                    label="⬇️ Download Predicted Expression (CSV)",
+                    data=f.read(),
+                    file_name=f"predicted_expression_{timestamp}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
     with tabs[1]:
         st.write("**Gene QC Metrics** (first 10 rows)")
         display_cols = [
@@ -376,6 +390,20 @@ if st.session_state.ga_results:
                     help=QC_COLUMN_HELP[col]
                 )
         st.dataframe(summary_df[display_cols].head(10), column_config=col_configs, use_container_width=True)
+
+        # Download button for Predicted Summary
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            with open(results["summary_path"], "rb") as f:
+                st.download_button(
+                    label="⬇️ Download Predicted Summary (CSV)",
+                    data=f.read(),
+                    file_name=f"predicted_summary_{timestamp}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
 
     with tabs[2]:
         st.write("**Prediction Status Reference**")
@@ -403,31 +431,6 @@ if st.session_state.ga_results:
                 "Description": st.column_config.TextColumn(width="large"),
             }
         )
-
-    # Download section
-    st.divider()
-    st.subheader("Download Results")
-    col1, col2 = st.columns(2)
-
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-    with col1:
-        with open(results["expr_path"], "rb") as f:
-            st.download_button(
-                label="Download Predicted Expression (CSV)",
-                data=f.read(),
-                file_name=f"predicted_expression_{timestamp}.csv",
-                mime="text/csv",
-            )
-
-    with col2:
-        with open(results["summary_path"], "rb") as f:
-            st.download_button(
-                label="Download Predicted Summary (CSV)",
-                data=f.read(),
-                file_name=f"predicted_summary_{timestamp}.csv",
-                mime="text/csv",
-            )
 
     st.divider()
     st.markdown(f"<div style='background-color: #1e3a5f; padding: 15px; border-radius: 5px;'><span style='color: #ff4444; font-weight: bold;'>Session UUID: {st.session_state.ga_uuid}</span><br><span style='color: #88ccee;'>Save this to reload results later</span></div>", unsafe_allow_html=True)
