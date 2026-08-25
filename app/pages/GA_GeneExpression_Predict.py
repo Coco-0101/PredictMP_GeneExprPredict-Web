@@ -126,7 +126,8 @@ with st.sidebar:
     uuid_input = st.text_input(
         "UUID",
         placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
 
     if st.button("Load UUID", use_container_width=True):
