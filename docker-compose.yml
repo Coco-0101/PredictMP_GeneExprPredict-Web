@@ -1,0 +1,31 @@
+services:
+  predictap-web:
+    build: .
+    image: predictap-web:latest
+    container_name: predictap-web
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /pkg/PredictAP_python:/app/app
+    ports:
+      - "127.0.0.1:${PREDICTAP_WEB_PORT:-8503}:${STREAMLIT_PORT:-8501}"
+    volumes:
+      - ${PREDICTAP_PACKAGE_DIR:?Set PREDICTAP_PACKAGE_DIR in .env}:/pkg/PredictAP_python:ro
+      - ${PREDICTAP_REFERENCE_DATA_HOST_PATH:?Set PREDICTAP_REFERENCE_DATA_HOST_PATH in .env}:/reference_data:ro
+      - ./save_tmp:/app/save_tmp
+      - ./app:/app/app
+      - ${GA_PRECOMPUTED_EXPRESSION_HOST_PATH:?Set GA_PRECOMPUTED_EXPRESSION_HOST_PATH in .env}:/ga_demo/predicted_expression.csv:ro
+      - ${GA_PRECOMPUTED_SUMMARY_HOST_PATH:?Set GA_PRECOMPUTED_SUMMARY_HOST_PATH in .env}:/ga_demo/predicted_summary.csv:ro
+      - ${GA_RESULTS_HOST_PATH:?Set GA_RESULTS_HOST_PATH in .env}:/ga_results:ro
+      - ${GA_WEIGHTS_DB_HOST_PATH:?Set GA_WEIGHTS_DB_HOST_PATH in .env}:/ga_weights:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os, urllib.request;
+          urllib.request.urlopen('http://localhost:' + os.environ['STREAMLIT_PORT'] + '/_stcore/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
