@@ -119,17 +119,24 @@ def main():
             print(f"\n✅ Upload complete in {upload_seconds:.1f}s "
                   f"({upload_seconds/60:.1f} min)\n")
 
-            # If auto-run isn't on, click Run Prediction ourselves.
+            # If auto-run already kicked in, "Processing Progress" will
+            # already be visible -- in that case do NOT also click Run
+            # Prediction: the button can still appear clickable in the DOM
+            # while the server is mid-run (Streamlit doesn't repaint
+            # widget-disabled state until the script finishes), so clicking
+            # it here would queue a second, overlapping analysis run.
+            already_running = page.get_by_text("Processing Progress", exact=False).count() > 0
+
             # exact=True avoids Playwright's substring matching from also
             # catching the sidebar's "Help for Auto-run prediction after
             # upload completes" tooltip button (its aria-label happens to
             # contain the substring "run prediction").
             run_button = page.get_by_role("button", name="Run Prediction", exact=True)
-            if run_button.count() > 0 and run_button.is_visible() and run_button.is_enabled():
+            if not already_running and run_button.count() > 0 and run_button.is_visible() and run_button.is_enabled():
                 print("[5/5] Auto-run not detected yet -- clicking 'Run Prediction'...")
                 run_button.click()
             else:
-                print("[5/5] Auto-run already started (or button not clickable) -- continuing...")
+                print("[5/5] Auto-run already started -- not clicking Run Prediction again.")
 
             if args.wait_predict:
                 print("Waiting for prediction to finish (this can take a while for large files)...")

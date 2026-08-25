@@ -100,6 +100,8 @@ if "upload_seen_time" not in st.session_state:
     st.session_state.upload_seen_time = None
 if "auto_run_done_key" not in st.session_state:
     st.session_state.auto_run_done_key = None
+if "is_processing" not in st.session_state:
+    st.session_state.is_processing = False
 
 # ─────────────────────────────────────────────────
 # Get available weights databases
@@ -230,17 +232,25 @@ with st.sidebar:
 
     st.divider()
 
-    # Run Analysis button (disabled if no file selected)
+    # Run Analysis button (disabled if no file selected, or already running --
+    # prevents a stray click from re-triggering a second overlapping run)
     manual_run = st.button(
         "Run Prediction",
         use_container_width=True,
         type="primary",
-        disabled=not vcf_file,
-        help="Select a VCF file first" if not vcf_file else "Click to start"
+        disabled=not vcf_file or st.session_state.is_processing,
+        help=(
+            "Select a VCF file first" if not vcf_file
+            else "Prediction already running" if st.session_state.is_processing
+            else "Click to start"
+        )
     )
 
 # Determine whether to run: either the user clicked the button, or
 # auto-run is enabled and this specific upload hasn't been processed yet.
+# Also refuse to start a new run while one is already in flight for this
+# UUID -- this is the key guard against duplicate/overlapping pipeline
+# runs stepping on each other's temp files.
 current_file_key = st.session_state.upload_seen_key
 should_auto_run = (
     auto_run
@@ -248,11 +258,12 @@ should_auto_run = (
     and current_file_key is not None
     and current_file_key != st.session_state.auto_run_done_key
 )
-run_analysis = manual_run or should_auto_run
+run_analysis = (manual_run or should_auto_run) and not st.session_state.is_processing
 
 if run_analysis and vcf_file:
     # Mark this file as processed so auto-run doesn't re-trigger on every rerun
     st.session_state.auto_run_done_key = current_file_key
+    st.session_state.is_processing = True
 
 
 # ─────────────────────────────────────────────────
@@ -276,79 +287,84 @@ if vcf_file and not run_analysis:
         st.info(f"VCF file selected: **{vcf_file.name}** ({vcf_file.size / 1024 / 1024:.1f} MB){elapsed_note}\n\nClick **Run Prediction** button in the sidebar to start")
 
 if run_analysis and vcf_file:
-    if not selected_weight_db:
-        st.error("❌ No weights database available. Please check configuration.")
-        st.stop()
-
-    st.divider()
-
-    # Use session UUID for working directory
-    work_dir = os.path.join(RESULTS_DIR, st.session_state.ga_uuid)
-    os.makedirs(work_dir, exist_ok=True)
-
-    vcf_path = os.path.join(work_dir, vcf_file.name)
-    with open(vcf_path, "wb") as f:
-        f.write(vcf_file.getbuffer())
-
-    # Create pipeline with selected configuration
+    # Always release the processing lock on the way out, however this
+    # block exits (success, error, or an early st.stop()).
     try:
-        pipeline = GenexprPipeline(
-            weights_db=selected_weight_db,
-            plink2_cmd=PLINK2_CMD,
-            weight_col=selected_weight_col,
-        )
-    except Exception as e:
-        st.error(f"Failed to initialize pipeline: {e}")
-        st.stop()
+        if not selected_weight_db:
+            st.error("❌ No weights database available. Please check configuration.")
+            st.stop()
 
-    # Run prediction
-    st.subheader("Processing Progress")
+        st.divider()
 
-    if st.session_state.upload_seen_time:
-        upload_ready_ago = time.time() - st.session_state.upload_seen_time
-        st.caption(f"File finished uploading {upload_ready_ago:.1f}s before prediction started")
+        # Use session UUID for working directory
+        work_dir = os.path.join(RESULTS_DIR, st.session_state.ga_uuid)
+        os.makedirs(work_dir, exist_ok=True)
 
-    progress_container = st.container()
-    status_text = st.empty()
-    progress_bar = st.progress(0)
+        vcf_path = os.path.join(work_dir, vcf_file.name)
+        with open(vcf_path, "wb") as f:
+            f.write(vcf_file.getbuffer())
 
-    pipeline_start_time = time.time()
+        # Create pipeline with selected configuration
+        try:
+            pipeline = GenexprPipeline(
+                weights_db=selected_weight_db,
+                plink2_cmd=PLINK2_CMD,
+                weight_col=selected_weight_col,
+            )
+        except Exception as e:
+            st.error(f"Failed to initialize pipeline: {e}")
+            st.stop()
 
-    try:
-        def update_progress(message: str, pct: int):
-            status_text.write(message)
-            progress_bar.progress(min(pct / 100, 0.99))
+        # Run prediction
+        st.subheader("Processing Progress")
 
-        expr_path, summary_path = pipeline.run(
-            vcf_path=vcf_path,
-            output_dir=work_dir,
-            progress_callback=update_progress,
-            assume_aligned=False,  # Always perform allele check for safety
-        )
-        progress_bar.progress(1.0)
-
-        pipeline_elapsed = time.time() - pipeline_start_time
-        timing_note = f" (prediction took {pipeline_elapsed:.1f}s"
         if st.session_state.upload_seen_time:
-            total_elapsed = time.time() - st.session_state.upload_seen_time
-            timing_note += f", {total_elapsed:.1f}s total since upload finished"
-        timing_note += ")"
-        status_text.success(f"Prediction complete!{timing_note}")
+            upload_ready_ago = time.time() - st.session_state.upload_seen_time
+            st.caption(f"File finished uploading {upload_ready_ago:.1f}s before prediction started")
 
-        # Load results
-        expr_df, summary_df = load_results(expr_path, summary_path)
-        st.session_state.ga_results = {
-            "expr_path": expr_path,
-            "summary_path": summary_path,
-            "expr_df": expr_df,
-            "summary_df": summary_df,
-            "session_uuid": st.session_state.ga_uuid,
-        }
+        progress_container = st.container()
+        status_text = st.empty()
+        progress_bar = st.progress(0)
 
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
-        st.session_state.error = str(e)
-        st.stop()
+        pipeline_start_time = time.time()
+
+        try:
+            def update_progress(message: str, pct: int):
+                status_text.write(message)
+                progress_bar.progress(min(pct / 100, 0.99))
+
+            expr_path, summary_path = pipeline.run(
+                vcf_path=vcf_path,
+                output_dir=work_dir,
+                progress_callback=update_progress,
+                assume_aligned=False,  # Always perform allele check for safety
+            )
+            progress_bar.progress(1.0)
+
+            pipeline_elapsed = time.time() - pipeline_start_time
+            timing_note = f" (prediction took {pipeline_elapsed:.1f}s"
+            if st.session_state.upload_seen_time:
+                total_elapsed = time.time() - st.session_state.upload_seen_time
+                timing_note += f", {total_elapsed:.1f}s total since upload finished"
+            timing_note += ")"
+            status_text.success(f"Prediction complete!{timing_note}")
+
+            # Load results
+            expr_df, summary_df = load_results(expr_path, summary_path)
+            st.session_state.ga_results = {
+                "expr_path": expr_path,
+                "summary_path": summary_path,
+                "expr_df": expr_df,
+                "summary_df": summary_df,
+                "session_uuid": st.session_state.ga_uuid,
+            }
+
+        except Exception as e:
+            st.error(f"Prediction failed: {e}")
+            st.session_state.error = str(e)
+            st.stop()
+    finally:
+        st.session_state.is_processing = False
 
 # ─────────────────────────────────────────────────
 # Try to load results from disk if UUID is set but results not in memory
