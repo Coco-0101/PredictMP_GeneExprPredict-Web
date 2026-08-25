@@ -441,8 +441,5 @@ if st.session_state.ga_results:
 
     st.divider()
     st.subheader("Session UUID")
-    st.markdown(
-        "<span style='color: #ff4b4b; font-weight: 600;'>Copy and save this to reload results later</span>",
-        unsafe_allow_html=True
-    )
+    st.info("Copy and save this to reload results later")
     st.code(st.session_state.ga_uuid, language="text")
