@@ -34,9 +34,10 @@ machine (IP address, hostname, or SSH tunnel address).
 ### Logging
 
 Every run appends one row to `upload_log.csv` (created next to this script) with
-columns: `timestamp, url, file, file_size_mb, upload_seconds, predict_seconds,
-total_seconds, status`. This lets you compare timings across multiple runs even
-after closing the terminal.
+columns: `timestamp, url, file, file_size_mb, session_uuid, upload_seconds,
+predict_seconds, total_seconds, status`. This lets you compare timings across
+multiple runs even after closing the terminal, and `session_uuid` lets you match
+a log row back to its results in the app (paste it into "Load UUID" in the sidebar).
 
 ```powershell
 # Use a custom log file path:

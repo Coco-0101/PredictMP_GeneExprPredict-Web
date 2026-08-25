@@ -8,7 +8,9 @@ optionally waits for prediction to finish and reports total time.
 
 Every run also appends a row to a local CSV log file (default:
 upload_log.csv, next to this script) so you can compare timings across
-multiple runs later, even after closing the terminal.
+multiple runs later, even after closing the terminal. The row includes
+the Session UUID, so you can match a log entry back to its results in
+the web app (paste the UUID into "Load UUID" in the sidebar).
 
 Setup (on Windows, PowerShell or cmd):
     pip install playwright
@@ -31,15 +33,20 @@ import argparse
 import csv
 import datetime
 import os
+import re
 import time
 
 from playwright.sync_api import sync_playwright
+
+UUID_PATTERN = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
 
 
 def append_log(log_path: str, row: dict):
     """Append one run's timing to a CSV log, writing the header if new."""
     fieldnames = [
-        "timestamp", "url", "file", "file_size_mb",
+        "timestamp", "url", "file", "file_size_mb", "session_uuid",
         "upload_seconds", "predict_seconds", "total_seconds", "status",
     ]
     file_exists = os.path.exists(log_path)
@@ -70,6 +77,7 @@ def main():
         "url": args.url,
         "file": args.file,
         "file_size_mb": f"{file_size_mb:.1f}",
+        "session_uuid": "",
         "upload_seconds": "",
         "predict_seconds": "",
         "total_seconds": "",
@@ -118,6 +126,22 @@ def main():
             log_row["status"] = "uploaded"
             print(f"\n✅ Upload complete in {upload_seconds:.1f}s "
                   f"({upload_seconds/60:.1f} min)\n")
+
+            # Grab the Session UUID from the sidebar (shown in an info box
+            # right below "Session UUID") so it's saved alongside the
+            # timing -- lets you match a log row back to its results later.
+            try:
+                uuid_locator = page.get_by_text(UUID_PATTERN)
+                uuid_locator.first.wait_for(state="visible", timeout=15_000)
+                match = UUID_PATTERN.search(uuid_locator.first.inner_text())
+                session_uuid = match.group(0) if match else ""
+            except Exception:
+                session_uuid = ""
+            log_row["session_uuid"] = session_uuid
+            if session_uuid:
+                print(f"Session UUID: {session_uuid}\n")
+            else:
+                print("Session UUID: (could not be read from the page)\n")
 
             # If auto-run already kicked in, "Processing Progress" will
             # already be visible -- in that case do NOT also click Run
