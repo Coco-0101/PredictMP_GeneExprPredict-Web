@@ -320,10 +320,6 @@ if st.session_state.ga_results:
 
     st.divider()
 
-    # Show UUID if available
-    if results.get("session_uuid"):
-        st.caption(f"Session UUID: {results['session_uuid']} — save this to reload results later")
-
     st.subheader("Results Summary")
 
     col1, col2, col3, col4 = st.columns(4)
