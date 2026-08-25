@@ -39,14 +39,27 @@ def main():
         browser = p.chromium.launch(headless=args.headless)
         page = browser.new_page()
 
-        print(f"[1/4] Opening {args.url} ...")
+        print(f"[1/5] Opening {args.url} ...")
         page.goto(args.url, wait_until="networkidle")
 
-        # Streamlit's file_uploader renders a real <input type="file">
+        # This app has two pages under st.navigation (see app/main.py).
+        # "PredictMP Analysis" is listed first and loads by default at the
+        # root URL, so we must explicitly switch to the GA page via the
+        # sidebar nav link before touching the file uploader -- otherwise
+        # we'd upload into the wrong page's uploader.
+        print("[2/5] Switching to GA-Calibrated Gene Expression Prediction page...")
+        ga_nav_link = page.get_by_role("link", name="GA-Calibrated Gene Expression Prediction")
+        ga_nav_link.wait_for(state="visible", timeout=15_000)
+        ga_nav_link.click()
+        page.wait_for_load_state("networkidle")
+
+        # Streamlit's file_uploader renders a real <input type="file">.
+        # Scope to the GA page's own uploader by anchoring on its label
+        # text, in case both pages' DOM are ever present at once.
         file_input = page.locator('input[type="file"]').first
         file_input.wait_for(state="attached", timeout=30_000)
 
-        print(f"[2/4] Selecting file: {args.file}")
+        print(f"[3/5] Selecting file: {args.file}")
         t_start = time.time()
         file_input.set_input_files(args.file)
 
@@ -54,7 +67,7 @@ def main():
         # received server-side -- it shows "VCF file selected: **name**"
         # (or, if auto-run is on, the Processing Progress section appears
         # almost immediately after, so watch for either).
-        print("[3/4] Waiting for server to confirm upload is complete...")
+        print("[4/5] Waiting for server to confirm upload is complete...")
         page.get_by_text("VCF file selected", exact=False).or_(
             page.get_by_text("Processing Progress", exact=False)
         ).first.wait_for(state="visible", timeout=0)  # no timeout -- large files can take a while
@@ -67,7 +80,7 @@ def main():
         # If auto-run isn't on, click Run Prediction ourselves
         run_button = page.get_by_role("button", name="Run Prediction")
         if run_button.is_visible() and run_button.is_enabled():
-            print("[4/4] Auto-run not detected yet -- clicking 'Run Prediction'...")
+            print("[5/5] Auto-run not detected yet -- clicking 'Run Prediction'...")
             run_button.click()
 
         if args.wait_predict:
