@@ -436,4 +436,6 @@ if st.session_state.ga_results:
         )
 
     st.divider()
-    st.markdown(f"<div style='background-color: #1e3a5f; padding: 15px; border-radius: 5px;'><span style='color: #ff4444; font-weight: bold;'>Session UUID: {st.session_state.ga_uuid}</span><br><span style='color: #88ccee;'>Save this to reload results later</span></div>", unsafe_allow_html=True)
+    st.subheader("Session UUID")
+    st.caption("Copy and save this to reload results later")
+    st.code(st.session_state.ga_uuid, language="text")
