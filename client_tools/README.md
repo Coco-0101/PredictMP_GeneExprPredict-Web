@@ -30,3 +30,15 @@ python measure_upload.py --url http://<server-ip>:8503 --file "C:\path\to\big.vc
 
 Replace `<server-ip>` with however you normally reach the web app from your Windows
 machine (IP address, hostname, or SSH tunnel address).
+
+### Logging
+
+Every run appends one row to `upload_log.csv` (created next to this script) with
+columns: `timestamp, url, file, file_size_mb, upload_seconds, predict_seconds,
+total_seconds, status`. This lets you compare timings across multiple runs even
+after closing the terminal.
+
+```powershell
+# Use a custom log file path:
+python measure_upload.py --url http://<server-ip>:8503 --file "C:\path\to\big.vcf.gz" --wait-predict --log-file "C:\logs\ga_uploads.csv"
+```
