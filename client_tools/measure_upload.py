@@ -54,8 +54,6 @@ def main():
         page.wait_for_load_state("networkidle")
 
         # Streamlit's file_uploader renders a real <input type="file">.
-        # Scope to the GA page's own uploader by anchoring on its label
-        # text, in case both pages' DOM are ever present at once.
         file_input = page.locator('input[type="file"]').first
         file_input.wait_for(state="attached", timeout=30_000)
 
@@ -77,11 +75,17 @@ def main():
         print(f"\n✅ Upload complete in {upload_seconds:.1f}s "
               f"({upload_seconds/60:.1f} min)\n")
 
-        # If auto-run isn't on, click Run Prediction ourselves
-        run_button = page.get_by_role("button", name="Run Prediction")
-        if run_button.is_visible() and run_button.is_enabled():
+        # If auto-run isn't on, click Run Prediction ourselves.
+        # exact=True avoids Playwright's substring matching from also
+        # catching the sidebar's "Help for Auto-run prediction after
+        # upload completes" tooltip button (its aria-label happens to
+        # contain the substring "run prediction").
+        run_button = page.get_by_role("button", name="Run Prediction", exact=True)
+        if run_button.count() > 0 and run_button.is_visible() and run_button.is_enabled():
             print("[5/5] Auto-run not detected yet -- clicking 'Run Prediction'...")
             run_button.click()
+        else:
+            print("[5/5] Auto-run already started (or button not clickable) -- continuing...")
 
         if args.wait_predict:
             print("Waiting for prediction to finish (this can take a while for large files)...")
