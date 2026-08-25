@@ -156,7 +156,7 @@ with st.sidebar:
     weight_type_values = ["GA_W", "PrediXcan_W"]
 
     selected_weight_col = st.radio(
-        "Weight Type",
+        "Weight Selection",
         options=weight_type_display,
         index=0,
         help="Select which weight model to use for prediction"
@@ -167,9 +167,9 @@ with st.sidebar:
     if selected_weight_col == "GA_W":
         # 使用邊框容器顯示子選項
         with st.container(border=True):
-            st.markdown("##### 📌 LOOCV Weight Type")
+            st.markdown("##### LOOCV Weight Type")
 
-            sign_type_display = ["Sign-flipped (推薦)", "Unsigned"]
+            sign_type_display = ["Sign-flipped (Recommended)", "Unsigned"]
             sign_type_values = ["Sign", "Unsign"]
 
             selected_sign_type = st.radio(
@@ -383,17 +383,30 @@ if st.session_state.ga_results:
 
     with tabs[2]:
         st.write("**Prediction Status Reference**")
-        col1, col2 = st.columns([1, 3])
 
+        # Build status reference table
+        status_data = []
         for status_code, mapping in STATUS_DISPLAY_MAP.items():
             display_name = mapping["display_name"]
             help_text = mapping["help"]
             count = (summary_df["status"] == status_code).sum()
+            status_data.append({
+                "Status": f"{display_name} ({count})",
+                "Description": help_text
+            })
 
-            with col1:
-                st.write(f"**{display_name}** ({count})")
-            with col2:
-                st.caption(help_text)
+        # Display as table
+        import pandas as pd
+        status_df = pd.DataFrame(status_data)
+        st.dataframe(
+            status_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Status": st.column_config.TextColumn(width="medium"),
+                "Description": st.column_config.TextColumn(width="large"),
+            }
+        )
 
     # Download section
     st.divider()
