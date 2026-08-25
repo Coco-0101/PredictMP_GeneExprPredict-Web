@@ -163,24 +163,35 @@ with st.sidebar:
     )
     selected_weight_col = weight_type_values[weight_type_display.index(selected_weight_col)]
 
-    # Weights Database selector (只在選擇 GA 時顯示)
+    # Sign/Unsigned selector (只在選擇 GA 時顯示)
     if selected_weight_col == "GA_W":
-        if available_dbs:
-            default_idx = 0
-            if "V4_3Fold_Sign_weights.db" in available_dbs:
-                default_idx = available_dbs.index("V4_3Fold_Sign_weights.db")
+        sign_type_display = ["Sign-flipped (推薦)", "Unsigned"]
+        sign_type_values = ["Sign", "Unsign"]
 
-            selected_db_name = st.selectbox(
-                "Weights Database",
-                options=available_dbs,
-                index=default_idx,
-                help="Choose which GA weight database version to use"
-            )
-            weights_dir = os.path.dirname(WEIGHTS_DB)
-            selected_weight_db = os.path.join(weights_dir, selected_db_name)
+        selected_sign_type = st.radio(
+            "LOOCV Weight Type",
+            options=sign_type_display,
+            index=0,
+            help="Sign-flipped: Recommended for most analyses | Unsigned: Alternative option"
+        )
+        selected_sign_type = sign_type_values[sign_type_display.index(selected_sign_type)]
+
+        # Build the database filename based on selection
+        weights_dir = os.path.dirname(WEIGHTS_DB)
+        if selected_sign_type == "Sign":
+            db_filename = "V4_LOOCV_Sign_weights.db"
         else:
-            st.warning(f"⚠️ No GA weights database found")
-            selected_weight_db = WEIGHTS_DB
+            db_filename = "V4_LOOCV_Unsign_weights.db"
+
+        selected_weight_db = os.path.join(weights_dir, db_filename)
+
+        # Display selected database info
+        st.info(f"✓ Using: LOOCV {selected_sign_type} weights database")
+
+        # Verify database exists
+        if not os.path.exists(selected_weight_db):
+            st.warning(f"⚠️ Database not found: {db_filename}")
+            st.info(f"Available databases: {', '.join(available_dbs) if available_dbs else 'None'}")
     else:
         # For PrediXcan_W, use the built-in database without selection
         st.info("✓ Using built-in Original PrediXcan Weight database")

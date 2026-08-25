@@ -11,7 +11,7 @@
 A web-based tool for predicting gene expression using **GA-calibrated weights** from genotype VCF files. The application integrates:
 
 - **VCF Upload Interface**: Simple drag-and-drop support
-- **Weight Selection**: Choose between GA-Calibrated or Original PrediXcan weights
+- **Weight Selection**: Choose between Sign-flipped or Unsigned LOOCV weights
 - **Real-time Processing**: Progress tracking with three pipeline stages
 - **Result Visualization**: Summary metrics, QC distribution, detailed tables
 - **CSV Download**: Export predicted expression and QC summary
@@ -35,8 +35,8 @@ Navigate to: **🧬 GA-Calibrated Gene Expression Prediction** in the sidebar
 
 ### Key Features
 
-✅ **GA-Calibrated Weights** - GA-optimized prediction models  
-✅ **Original PrediXcan Weights** - Standard prediction weights  
+✅ **LOOCV Sign-flipped Weights** - Recommended for most analyses  
+✅ **LOOCV Unsigned Weights** - Alternative option  
 ✅ **Real-time Progress** - Three-stage processing pipeline  
 ✅ **QC Metrics** - Per-gene SNP coverage & variance statistics  
 ✅ **Status Indicators** - Clear prediction quality classification  
@@ -99,7 +99,7 @@ gunzip output_rsid.vcf.gz
 #### Step 2: Upload & Configure
 1. Click **VCF file uploader** → select your file
 2. Choose **Weight Type** (sidebar):
-   - **GA-Calibrated Weights** → Select database version
+   - **GA-Calibrated Weights** → Select Sign-flipped or Unsigned LOOCV
    - **Original PrediXcan Weight** → Auto-uses built-in database
 3. Click **Run Prediction** button
 
@@ -392,7 +392,7 @@ gunzip output_rsid.vcf.gz
 #### 步驟 2：上傳和配置
 1. 點擊 **VCF 檔案上傳器** → 選擇檔案
 2. 選擇 **權重類型**（側邊欄）：
-   - **GA-Calibrated Weights** → 選擇數據庫版本
+   - **GA-Calibrated Weights** → 選擇 Sign-flipped 或 Unsigned LOOCV
    - **Original PrediXcan Weight** → 自動使用內建數據庫
 3. 點擊 **Run Prediction** 按鈕
 
