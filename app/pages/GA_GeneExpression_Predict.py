@@ -522,7 +522,7 @@ if st.session_state.ga_results:
 
         csv_data = summary_page.to_csv(index=False)
         st.download_button(
-            label=f"⬇️ Download QC Metrics — Page {summary_page_num} (CSV)",
+            label=f"⬇️ Download Predicted Summary — Page {summary_page_num} (CSV)",
             data=csv_data,
             file_name=f"predicted_summary_page{summary_page_num}_{timestamp}.csv",
             mime="text/csv",
