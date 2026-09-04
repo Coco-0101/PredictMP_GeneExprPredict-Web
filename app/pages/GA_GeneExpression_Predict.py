@@ -119,8 +119,8 @@ def get_status_display_name(status_code: str) -> str:
     """Convert internal status code to display name"""
     return STATUS_DISPLAY_MAP.get(status_code, {}).get("display_name", status_code)
 
-def paginate_dataframe(df: pd.DataFrame, key: str, page_size: int = 500) -> pd.DataFrame:
-    """Show a page-number control and return only that page's rows."""
+def paginate_dataframe(df: pd.DataFrame, key: str, page_size: int = 500):
+    """Show a page-number control and return (page_df, page_num, total_pages)."""
     total_rows = len(df)
     total_pages = max(1, -(-total_rows // page_size))  # ceil division
 
@@ -139,7 +139,7 @@ def paginate_dataframe(df: pd.DataFrame, key: str, page_size: int = 500) -> pd.D
     with col2:
         st.caption(f"Showing rows {start + 1}-{end} of {total_rows} (page {page} of {total_pages})")
 
-    return df.iloc[start:end]
+    return df.iloc[start:end], page, total_pages
 
 available_dbs = get_available_weights()
 selected_weight_db = None
@@ -470,21 +470,23 @@ if st.session_state.ga_results:
             expr_df_display = pd.concat([fid_row, expr_df_display])
 
         # Paginate: show 500 genes/rows per page instead of the whole table
-        page_display = paginate_dataframe(expr_df_display, key="expr", page_size=500)
-        st.dataframe(page_display, use_container_width=True, height=400)
+        expr_page_display, expr_page_num, expr_total_pages = paginate_dataframe(
+            expr_df_display, key="expr", page_size=500
+        )
+        st.dataframe(expr_page_display, use_container_width=True, height=400)
 
-        # Download section for Predicted Expression
+        # Download section for Predicted Expression -- downloads only the
+        # currently displayed page, not the full dataset
         st.divider()
-        st.write("**Download**")
+        st.write(f"**Download** (page {expr_page_num} of {expr_total_pages})")
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
-        # Download all data (original format for compatibility)
-        csv_data = expr_df.to_csv(index=False)
+        csv_data = expr_page_display.to_csv()
         st.download_button(
-            label="⬇️ Download Predicted Expression (CSV)",
+            label=f"⬇️ Download Predicted Expression — Page {expr_page_num} (CSV)",
             data=csv_data,
-            file_name=f"predicted_expression_{timestamp}.csv",
+            file_name=f"predicted_expression_page{expr_page_num}_{timestamp}.csv",
             mime="text/csv",
             use_container_width=True
         )
@@ -506,21 +508,23 @@ if st.session_state.ga_results:
                     help=QC_COLUMN_HELP[col]
                 )
         # Paginate: show 500 genes/rows per page instead of the whole table
-        summary_page = paginate_dataframe(summary_df[display_cols], key="summary", page_size=500)
+        summary_page, summary_page_num, summary_total_pages = paginate_dataframe(
+            summary_df[display_cols], key="summary", page_size=500
+        )
         st.dataframe(summary_page, column_config=col_configs, use_container_width=True, height=400)
 
-        # Download section for Predicted Summary
+        # Download section for Predicted Summary -- downloads only the
+        # currently displayed page, not the full dataset
         st.divider()
-        st.write("**Download**")
+        st.write(f"**Download** (page {summary_page_num} of {summary_total_pages})")
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
-        # Download all data
-        csv_data = summary_df[display_cols].to_csv(index=False)
+        csv_data = summary_page.to_csv(index=False)
         st.download_button(
-            label="⬇️ Download QC Metrics (CSV)",
+            label=f"⬇️ Download QC Metrics — Page {summary_page_num} (CSV)",
             data=csv_data,
-            file_name=f"predicted_summary_{timestamp}.csv",
+            file_name=f"predicted_summary_page{summary_page_num}_{timestamp}.csv",
             mime="text/csv",
             use_container_width=True
         )
