@@ -7,6 +7,7 @@ import os
 import time
 import streamlit as st
 import tempfile
+import pandas as pd
 from pathlib import Path
 import uuid
 from datetime import datetime
@@ -117,6 +118,28 @@ def get_available_weights():
 def get_status_display_name(status_code: str) -> str:
     """Convert internal status code to display name"""
     return STATUS_DISPLAY_MAP.get(status_code, {}).get("display_name", status_code)
+
+def paginate_dataframe(df: pd.DataFrame, key: str, page_size: int = 500) -> pd.DataFrame:
+    """Show a page-number control and return only that page's rows."""
+    total_rows = len(df)
+    total_pages = max(1, -(-total_rows // page_size))  # ceil division
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        page = st.number_input(
+            "Page",
+            min_value=1,
+            max_value=total_pages,
+            value=1,
+            step=1,
+            key=f"{key}_page",
+        )
+    start = (page - 1) * page_size
+    end = min(start + page_size, total_rows)
+    with col2:
+        st.caption(f"Showing rows {start + 1}-{end} of {total_rows} (page {page} of {total_pages})")
+
+    return df.iloc[start:end]
 
 available_dbs = get_available_weights()
 selected_weight_db = None
@@ -428,12 +451,27 @@ if st.session_state.ga_results:
     with tabs[0]:
         st.write(f"**Predicted Expression Matrix** ({len(expr_df)} samples × {len(expr_df.columns)-2} genes)")
 
-        # Transpose table: genes as rows, samples as columns
-        expr_df_display = expr_df.set_index(['FID', 'IID']).T
+        # Transpose table: genes as rows, samples (IID) as columns.
+        # FID is kept out of the column header (a MultiIndex there would
+        # render as an extra "0" header row above IID) -- instead it's
+        # shown as a caption if constant across samples, or as the first
+        # data row (alongside the genes) if it actually varies, so no
+        # information is lost either way.
+        fid_by_iid = expr_df.set_index("IID")["FID"]
+        expr_df_display = expr_df.drop(columns=["FID"]).set_index("IID").T
         expr_df_display.index.name = "gene"
 
-        # Display full table (Streamlit handles pagination automatically)
-        st.dataframe(expr_df_display, use_container_width=True, height=400)
+        if fid_by_iid.nunique() <= 1:
+            fid_value = fid_by_iid.iloc[0] if len(fid_by_iid) else ""
+            st.caption(f"FID: {fid_value} (same for all samples)")
+        else:
+            fid_row = fid_by_iid.to_frame().T
+            fid_row.index = ["FID"]
+            expr_df_display = pd.concat([fid_row, expr_df_display])
+
+        # Paginate: show 500 genes/rows per page instead of the whole table
+        page_display = paginate_dataframe(expr_df_display, key="expr", page_size=500)
+        st.dataframe(page_display, use_container_width=True, height=400)
 
         # Download section for Predicted Expression
         st.divider()
@@ -467,8 +505,9 @@ if st.session_state.ga_results:
                     col,
                     help=QC_COLUMN_HELP[col]
                 )
-        # Display full table (Streamlit handles pagination automatically)
-        st.dataframe(summary_df[display_cols], column_config=col_configs, use_container_width=True, height=400)
+        # Paginate: show 500 genes/rows per page instead of the whole table
+        summary_page = paginate_dataframe(summary_df[display_cols], key="summary", page_size=500)
+        st.dataframe(summary_page, column_config=col_configs, use_container_width=True, height=400)
 
         # Download section for Predicted Summary
         st.divider()
@@ -501,7 +540,6 @@ if st.session_state.ga_results:
             })
 
         # Display as table
-        import pandas as pd
         status_df = pd.DataFrame(status_data)
         st.dataframe(
             status_df,
