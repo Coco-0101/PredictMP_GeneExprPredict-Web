@@ -231,7 +231,8 @@ if st.session_state.predictmp_results:
     n_subjects = df[["FID", "IID"]].drop_duplicates().shape[0]
     n_genes = df["gene"].nunique()
     median_percentile = df["percentile.rank"].median() if "percentile.rank" in df.columns else None
-    ks_significant = (df["ks.test"] == "Sig.").sum() if "ks.test" in df.columns else 0
+    # ks.test is per gene (same for every subject), so count unique genes, not rows
+    ks_significant = df.loc[df["ks.test"] == "Sig.", "gene"].nunique() if "ks.test" in df.columns else None
 
     with col1:
         st.metric("Genes", f"{n_genes:,}")
@@ -243,7 +244,10 @@ if st.session_state.predictmp_results:
         else:
             st.metric("Median percentile rank", "N/A")
     with col4:
-        st.metric("KS Significant genes", f"{ks_significant:,} / {n_genes:,}")
+        if ks_significant is not None:
+            st.metric("KS Significant genes", f"{ks_significant:,} / {n_genes:,}")
+        else:
+            st.metric("KS Significant genes", "N/A (NFE reference)")
 
     # UUID info with red color
     st.markdown(f"<div style='background-color: #1e3a5f; padding: 15px; border-radius: 5px;'><span style='color: #ff4444; font-weight: bold;'>Session UUID: {results['uuid']}</span><br><span style='color: #88ccee;'>Save this to reload results later</span></div>", unsafe_allow_html=True)
