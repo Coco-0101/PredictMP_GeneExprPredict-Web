@@ -115,7 +115,15 @@ docker compose up -d --build
 bash tools/upload_data.sh gdrive:PredictMP_GeneExprPredict-Web
 ```
 
-只上傳網站要用的 parquet 和 `.db`，傳完會自動比對檢查碼。中斷了重跑同一行就會接著傳；資料更新後重跑，只會傳有變動的檔案。
+雲端上的配置：
+
+| 位置 | 內容 |
+|---|---|
+| `reference_data/ks/`、`reference_data/result_table/` | 小檔案，逐檔上傳 |
+| `reference_data_tar/tissue_<pop>.tar` | 每個族群 49 個 tissue parquet 包成一個 tar（約 1.3 GB） |
+| `ga_weights/` | 6 個 GA 權重 `.db` |
+
+tissue 打包上傳的原因：Google Drive 處理大量中小檔案很慢（約 1 MB/s），大檔則有約 20 MB/s。打包是邊讀邊傳，本機不會產生 tar 檔，也不會改動原始檔；每個 tar 傳完會比對 MD5。只更新部分族群時：`POPS="eas nfe" bash tools/upload_data.sh gdrive:PredictMP_GeneExprPredict-Web`。
 
 ### 3. 新主機：下載並架設（需要 Docker + Docker Compose）
 
@@ -123,8 +131,13 @@ bash tools/upload_data.sh gdrive:PredictMP_GeneExprPredict-Web
 DEST=/srv/predictmp
 mkdir -p $DEST && cd $DEST
 git clone https://github.com/Coco-0101/PredictMP_GeneExprPredict-Web.git
-rclone copy gdrive:PredictMP_GeneExprPredict-Web/reference_data $DEST/reference_data -P
-rclone copy gdrive:PredictMP_GeneExprPredict-Web/ga_weights     $DEST/ga_weights     -P
+R=gdrive:PredictMP_GeneExprPredict-Web
+rclone copy $R/reference_data     $DEST/reference_data --include "ks/**" --include "result_table/**" -P
+rclone copy $R/reference_data_tar $DEST/reference_data_tar -P
+for f in $DEST/reference_data_tar/tissue_*.tar; do tar -xf "$f" -C $DEST/reference_data; done
+ls $DEST/reference_data/tissue | wc -l          # 應該是 441
+rm -r $DEST/reference_data_tar                   # 解開後 tar 可以刪掉
+rclone copy $R/ga_weights $DEST/ga_weights -P
 
 cd PredictMP_GeneExprPredict-Web
 cp .env.example .env
@@ -135,7 +148,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-參考資料或權重更新時：這台重跑 `upload_data.sh`，新主機重跑兩行 `rclone copy`，再 `docker compose restart`。
+參考資料或權重更新時：這台重跑 `upload_data.sh`，新主機重跑上面的下載和解壓，再 `docker compose restart`。
 
 ## 資料保存與隱私
 
