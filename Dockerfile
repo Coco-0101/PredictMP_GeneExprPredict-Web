@@ -23,7 +23,7 @@ RUN cd /tmp && wget -q https://s3.amazonaws.com/plink2-assets/alpha5/plink2_linu
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# PredictMP package (wheel built from PredictMP/code/PredictMP_python, see README)
+# PredictMP package (wheel built from PredictMP/code/PredictMP_pkg, see README)
 COPY wheels/ /tmp/wheels/
 RUN pip install --no-cache-dir /tmp/wheels/predictmp-*.whl && rm -rf /tmp/wheels
 

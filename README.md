@@ -39,10 +39,10 @@ PredictMP_GeneExprPredict-Web/
 
 wheel（`.whl`）是 Python 套件的安裝檔。建 image 時會用 `pip install` 把它裝進容器，網站就不必再去讀主機上的套件資料夾。
 
-PredictMP 的原始碼在 `PredictMP/code/PredictMP_python/`。**只有改了套件程式**才需要重新打包：
+PredictMP 的原始碼在 `PredictMP/code/PredictMP_pkg/`。**只有改了套件程式**才需要重新打包：
 
 ```bash
-cd /home/betty0101/Project/PredictMP/code/PredictMP_python
+cd /home/betty0101/Project/PredictMP/code/PredictMP_pkg
 rm -f /home/betty0101/Project/PredictMP_GeneExprPredict-Web/wheels/predictmp-*.whl
 pip wheel --no-deps -w /home/betty0101/Project/PredictMP_GeneExprPredict-Web/wheels .
 ```
