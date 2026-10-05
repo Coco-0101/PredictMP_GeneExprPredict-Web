@@ -1,10 +1,10 @@
-name: predictmp-web
+name: predictmp_geneexprpredict-web
 
 services:
-  predictmp-web:
+  predictmp_geneexprpredict-web:
     build: .
-    image: predictmp-web:latest
-    container_name: predictmp-web
+    image: predictmp_geneexprpredict-web:latest
+    container_name: predictmp_geneexprpredict-web
     # Non-root: a public site should not run as root; host data on NFS is readable as this user
     user: "${PREDICTMP_UID:-1009}:${PREDICTMP_GID:-100}"
     env_file:
@@ -34,4 +34,4 @@ services:
 volumes:
   # Uploads and results live on local disk (not NFS), readable only by root on the host
   session_results:
-    name: predictmp_session_results
+    name: predictmp_geneexprpredict-web_session_results

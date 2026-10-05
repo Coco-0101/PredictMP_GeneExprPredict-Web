@@ -58,7 +58,7 @@ cp .env.example .env     # 再依實際路徑修改
 | `PREDICTMP_WEB_PORT` | 主機上的 port（只綁 127.0.0.1，對外請用 nginx 反向代理） |
 | `PREDICTMP_REFERENCE_DATA_HOST_PATH` | PredictAP 參考資料所在的主機資料夾，裡面要有 `tissue/`、`result_table/`、`ks/`（由 `PredictMP/code/08_build_package_data.py` 產生） |
 | `PREDICTAP_DATA_DIR` | 容器內參考資料的位置。PredictAP 套件會讀這個變數，**名稱不要改** |
-| `RESULTS_DIR` | 容器內存放上傳檔與結果的位置（Docker volume `predictmp_session_results`） |
+| `RESULTS_DIR` | 容器內存放上傳檔與結果的位置（Docker volume `predictmp_geneexprpredict-web_session_results`） |
 | `RESULTS_RETENTION_DAYS` | 結果保存天數，預設 7 |
 | `GA_WEIGHTS_DB_HOST_PATH` | GA 權重資料庫所在的主機資料夾 |
 | `GA_WEIGHTS_DB_PATH` | 「Original PrediXcan Weight」使用的資料庫（容器內路徑） |
@@ -80,18 +80,18 @@ docker compose up -d --build
 | 改了 `.env` | `docker compose up -d --force-recreate` |
 | 換了 wheel、`requirements.txt`、`Dockerfile`、`entrypoint.sh` | `docker compose up -d --build` |
 | 重建了 PredictAP 參考資料（08） | `docker compose restart`（清掉套件的記憶體快取） |
-| 看 log | `docker compose logs -f predictmp-web` |
+| 看 log | `docker compose logs -f predictmp_geneexprpredict-web` |
 | 停止 | `docker compose down` |
 
 ## 資料保存與隱私
 
-- 每次分析都存在容器內的 `/app/session_results/<Session UUID>/`，實際放在 Docker volume `predictmp_session_results`（本機硬碟，只有 root 讀得到；不放 `/mnt/data_40T`，因為 NFS 上伺服器其他使用者可能讀到上傳的基因資料，容器也會有權限問題）。使用者可以用 UUID 在側邊欄的「Load UUID」重新載入結果。
+- 每次分析都存在容器內的 `/app/session_results/<Session UUID>/`，實際放在 Docker volume `predictmp_geneexprpredict-web_session_results`（本機硬碟，只有 root 讀得到；不放 `/mnt/data_40T`，因為 NFS 上伺服器其他使用者可能讀到上傳的基因資料，容器也會有權限問題）。使用者可以用 UUID 在側邊欄的「Load UUID」重新載入結果。
 - 輸入的 UUID 必須是標準格式，否則不接受，避免有人用 `../` 之類的輸入讀取伺服器上的其他檔案。
 - `entrypoint.sh` 每小時執行一次 `python -m core.storage`，刪除超過 `RESULTS_RETENTION_DAYS` 天沒有更新的 session 資料夾。手動執行：
   ```bash
-  docker compose exec predictmp-web python -m core.storage
+  docker compose exec predictmp_geneexprpredict-web python -m core.storage
   ```
-- 查看目前存了哪些 session：`docker compose exec predictmp-web ls -la /app/session_results`
+- 查看目前存了哪些 session：`docker compose exec predictmp_geneexprpredict-web ls -la /app/session_results`
 - 網站側邊欄有保存期限提示，**Privacy & Data Retention** 頁面有完整說明。改了保存天數，說明會跟著變。
 
 ## PredictMP Analysis

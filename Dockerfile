@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir /tmp/wheels/predictap-*.whl && rm -rf /tmp/wheels
 # App source
 COPY app/ ./app/
 
-# Per-session upload/result folders (Docker volume predictmp_session_results); writable by the non-root user
+# Per-session upload/result folders (Docker volume predictmp_geneexprpredict-web_session_results); writable by the non-root user
 RUN mkdir -p /app/session_results && chmod 1777 /app/session_results
 
 # Entrypoint checks PredictAP and starts Streamlit
