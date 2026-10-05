@@ -74,7 +74,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
-    if st.button("Load UUID", use_container_width=True):
+    if st.button("Load UUID", width="stretch"):
         if uuid_input:
             if is_valid_session_id(uuid_input):
                 st.session_state.predictmp_uuid = uuid_input.strip().lower()
@@ -122,7 +122,7 @@ with st.sidebar:
     run_button_disabled = not uploaded_file or not st.session_state.predictmp_uuid
     run_analysis = st.button(
         "Run PredictMP",
-        use_container_width=True,
+        width="stretch",
         type="primary",
         disabled=run_button_disabled,
         help="Upload file first" if run_button_disabled else "Click to run analysis"
@@ -304,7 +304,7 @@ if st.session_state.predictmp_results:
     st.dataframe(
         filtered_df.head(5000),
         column_config=col_configs,
-        use_container_width=True,
+        width="stretch",
         hide_index=False
     )
 

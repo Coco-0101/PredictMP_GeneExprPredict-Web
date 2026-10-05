@@ -160,7 +160,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
-    if st.button("Load UUID", use_container_width=True):
+    if st.button("Load UUID", width="stretch"):
         if uuid_input:
             if is_valid_session_id(uuid_input):
                 st.session_state.ga_uuid = uuid_input.strip().lower()
@@ -258,7 +258,7 @@ with st.sidebar:
     # prevents a stray click from re-triggering a second overlapping run)
     manual_run = st.button(
         "Run Prediction",
-        use_container_width=True,
+        width="stretch",
         type="primary",
         disabled=not vcf_file or st.session_state.is_processing,
         help=(
@@ -471,7 +471,7 @@ if st.session_state.ga_results:
         expr_page_display, expr_page_num, expr_total_pages = paginate_dataframe(
             expr_df_display, key="expr", page_size=500
         )
-        st.dataframe(expr_page_display, use_container_width=True, height=400)
+        st.dataframe(expr_page_display, width="stretch", height=400)
 
         # Download section for Predicted Expression -- downloads only the
         # currently displayed page, not the full dataset
@@ -486,7 +486,7 @@ if st.session_state.ga_results:
             data=csv_data,
             file_name=f"predicted_expression_page{expr_page_num}_{timestamp}.csv",
             mime="text/csv",
-            use_container_width=True
+            width="stretch"
         )
 
     with tabs[1]:
@@ -509,7 +509,7 @@ if st.session_state.ga_results:
         summary_page, summary_page_num, summary_total_pages = paginate_dataframe(
             summary_df[display_cols], key="summary", page_size=500
         )
-        st.dataframe(summary_page, column_config=col_configs, use_container_width=True, height=400)
+        st.dataframe(summary_page, column_config=col_configs, width="stretch", height=400)
 
         # Download section for Predicted Summary -- downloads only the
         # currently displayed page, not the full dataset
@@ -524,7 +524,7 @@ if st.session_state.ga_results:
             data=csv_data,
             file_name=f"predicted_summary_page{summary_page_num}_{timestamp}.csv",
             mime="text/csv",
-            use_container_width=True
+            width="stretch"
         )
 
     with tabs[2]:
@@ -545,7 +545,7 @@ if st.session_state.ga_results:
         status_df = pd.DataFrame(status_data)
         st.dataframe(
             status_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "Status": st.column_config.TextColumn(width="medium"),
