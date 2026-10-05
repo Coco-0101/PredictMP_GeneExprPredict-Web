@@ -23,9 +23,9 @@ RUN cd /tmp && wget -q https://s3.amazonaws.com/plink2-assets/alpha5/plink2_linu
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# PredictAP package (wheel built from PredictMP/code/PredictAP_python, see README)
+# PredictMP package (wheel built from PredictMP/code/PredictMP_python, see README)
 COPY wheels/ /tmp/wheels/
-RUN pip install --no-cache-dir /tmp/wheels/predictap-*.whl && rm -rf /tmp/wheels
+RUN pip install --no-cache-dir /tmp/wheels/predictmp-*.whl && rm -rf /tmp/wheels
 
 # App source
 COPY app/ ./app/
@@ -33,7 +33,7 @@ COPY app/ ./app/
 # Per-session upload/result folders (Docker volume predictmp_geneexprpredict-web_session_results); writable by the non-root user
 RUN mkdir -p /app/session_results && chmod 1777 /app/session_results
 
-# Entrypoint checks PredictAP and starts Streamlit
+# Entrypoint checks PredictMP and starts Streamlit
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

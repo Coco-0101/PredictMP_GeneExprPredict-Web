@@ -5,8 +5,8 @@ app_path="${PREDICTMP_APP_PATH:-/app/app/main.py}"
 streamlit_port="${STREAMLIT_PORT:-8501}"
 max_upload_mb="${STREAMLIT_MAX_UPLOAD_MB:-500}"
 
-if ! python -c "import PredictAP" 2>/dev/null; then
-    echo "PredictAP package is not installed in the image." >&2
+if ! python -c "import PredictMP" 2>/dev/null; then
+    echo "PredictMP package is not installed in the image." >&2
     echo "Build the wheel into wheels/ and rebuild (see README)." >&2
     exit 1
 fi

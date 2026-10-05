@@ -11,7 +11,7 @@ from core.storage import is_valid_session_id, new_session_id, session_dir
 from core.tissues import TISSUE_NAME_TO_CODE, TISSUES, POPULATION_MAP, POPULATIONS
 
 try:
-    from PredictAP import rankcal
+    from PredictMP import rankcal
 except ImportError:
     rankcal = None
 
@@ -142,7 +142,7 @@ elif not uploaded_file and not run_analysis:
 
 if run_analysis and uploaded_file:
     if rankcal is None:
-        st.error("PredictAP package not found. Please check installation.")
+        st.error("PredictMP package not found. Please check installation.")
         st.stop()
 
     try:
@@ -162,16 +162,16 @@ if run_analysis and uploaded_file:
         st.subheader("Processing")
         progress_text = st.empty()
 
-        progress_text.write(f"Loading file and running PredictAP...")
+        progress_text.write(f"Loading file and running PredictMP...")
 
         # Read uploaded file as DataFrame (PrediXcan output is tab-separated; .csv is comma-separated)
         stringio = StringIO(uploaded_file.getvalue().decode("utf8"))
         sep = "," if uploaded_file.name.lower().endswith(".csv") else "\t"
         input_df = pd.read_csv(stringio, sep=sep)
 
-        progress_text.write(f"Running PredictAP with tissue={tissue_code}, population={pop_code}...")
+        progress_text.write(f"Running PredictMP with tissue={tissue_code}, population={pop_code}...")
 
-        # Call PredictAP rankcal (pass DataFrame, not file path)
+        # Call PredictMP rankcal (pass DataFrame, not file path)
         result_df = rankcal(
             data=input_df,
             tissue=tissue_code,

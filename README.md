@@ -4,7 +4,7 @@
 
 | 頁面 | 輸入 | 做什麼 |
 |---|---|---|
-| **📊 PredictMP Analysis** | PrediXcan 預測結果（`*_predicted_expression.txt`） | 用 PredictAP 把每個人每個基因的預測表現量，對 gnomAD v4.1 九個族群的模擬參考分布算 percentile rank，並附 KS test（vs NFE）結果 |
+| **📊 PredictMP Analysis** | PrediXcan 預測結果（`*_predicted_expression.txt`） | 用 PredictMP 把每個人每個基因的預測表現量，對 gnomAD v4.1 九個族群的模擬參考分布算 percentile rank，並附 KS test（vs NFE）結果 |
 | **🧬 GA-Calibrated Gene Expression Prediction** | VCF 基因型檔 | 用 GA 校正後（或原始 PrediXcan）的權重，直接從基因型預測基因表現量，並給每個基因 QC 狀態 |
 | **🔒 Privacy & Data Retention** | — | 給使用者看的隱私與資料保存說明 |
 
@@ -23,7 +23,7 @@ PredictMP_GeneExprPredict-Web/
 │       ├── storage.py          Session UUID 資料夾、UUID 格式檢查、過期自動刪除
 │       ├── ga_pipeline.py      VCF → plink2 dosage → 預測 → 輸出檔
 │       └── ga_predict.py       權重 × dosage 的預測與 QC summary（也可單獨當 CLI 用）
-├── wheels/                     PredictAP 套件安裝檔（.whl）
+├── wheels/                     PredictMP 套件安裝檔（.whl）
 ├── tools/
 │   ├── upload_data.sh          把參考資料和 GA 權重上傳到 Google Drive（部署到另一台主機用）
 │   └── measure_upload.py       在自己電腦上量測上傳 / 預測時間的工具（不進 image）
@@ -35,15 +35,15 @@ PredictMP_GeneExprPredict-Web/
 
 ## 架設
 
-### 1. 準備 PredictAP 套件（wheel）
+### 1. 準備 PredictMP 套件（wheel）
 
 wheel（`.whl`）是 Python 套件的安裝檔。建 image 時會用 `pip install` 把它裝進容器，網站就不必再去讀主機上的套件資料夾。
 
-PredictAP 的原始碼在 `PredictMP/code/PredictAP_python/`。**只有改了套件程式**才需要重新打包：
+PredictMP 的原始碼在 `PredictMP/code/PredictMP_python/`。**只有改了套件程式**才需要重新打包：
 
 ```bash
-cd /home/betty0101/Project/PredictMP/code/PredictAP_python
-rm -f /home/betty0101/Project/PredictMP_GeneExprPredict-Web/wheels/predictap-*.whl
+cd /home/betty0101/Project/PredictMP/code/PredictMP_python
+rm -f /home/betty0101/Project/PredictMP_GeneExprPredict-Web/wheels/predictmp-*.whl
 pip wheel --no-deps -w /home/betty0101/Project/PredictMP_GeneExprPredict-Web/wheels .
 ```
 
@@ -58,8 +58,8 @@ cp .env.example .env     # 再依實際路徑修改
 | 變數 | 說明 |
 |---|---|
 | `PREDICTMP_WEB_PORT` | 主機上的 port（只綁 127.0.0.1，對外請用 nginx 反向代理） |
-| `PREDICTMP_REFERENCE_DATA_HOST_PATH` | PredictAP 參考資料所在的主機資料夾，裡面要有 `tissue/`、`result_table/`、`ks/`（由 `PredictMP/code/08_build_package_data.py` 產生） |
-| `PREDICTAP_DATA_DIR` | 容器內參考資料的位置。PredictAP 套件會讀這個變數，**名稱不要改** |
+| `PREDICTMP_REFERENCE_DATA_HOST_PATH` | PredictMP 參考資料所在的主機資料夾，裡面要有 `tissue/`、`result_table/`、`ks/`（由 `PredictMP/code/08_build_package_data.py` 產生） |
+| `PREDICTMP_DATA_DIR` | 容器內參考資料的位置。PredictMP 套件會讀這個變數，**名稱不要改** |
 | `RESULTS_DIR` | 容器內存放上傳檔與結果的位置（Docker volume `predictmp_geneexprpredict-web_session_results`） |
 | `RESULTS_RETENTION_DAYS` | 結果保存天數，預設 7 |
 | `GA_WEIGHTS_DB_HOST_PATH` | GA 權重資料庫所在的主機資料夾 |
@@ -81,7 +81,7 @@ docker compose up -d --build
 | 只改了 `app/` 的程式 | 不用做任何事，重新整理網頁即可 |
 | 改了 `.env` | `docker compose up -d --force-recreate` |
 | 換了 wheel、`requirements.txt`、`Dockerfile`、`entrypoint.sh` | `docker compose up -d --build` |
-| 重建了 PredictAP 參考資料（08） | `docker compose restart`（清掉套件的記憶體快取） |
+| 重建了 PredictMP 參考資料（08） | `docker compose restart`（清掉套件的記憶體快取） |
 | 看 log | `docker compose logs -f predictmp_geneexprpredict-web` |
 | 停止 | `docker compose down` |
 
@@ -91,9 +91,9 @@ docker compose up -d --build
 
 | 東西 | 怎麼到新主機 |
 |---|---|
-| 網站程式（含 PredictAP wheel） | GitHub：`git clone` |
+| 網站程式（含 PredictMP wheel） | GitHub：`git clone` |
 | Docker image | 不傳，新主機用 `docker compose up -d --build` 自己 build（需要能上網） |
-| PredictAP 參考資料（約 12 GB）、GA 權重（約 105 MB） | Google Drive + rclone |
+| PredictMP 參考資料（約 12 GB）、GA 權重（約 105 MB） | Google Drive + rclone |
 | `.env` | 不傳，在新主機依 `.env.example` 重寫 |
 | 使用者的 session 結果 | 不傳 |
 

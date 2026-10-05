@@ -79,3 +79,6 @@ htmlcov/
 # Node (if any frontend build)
 node_modules/
 package-lock.json
+
+# NFS silly-rename files
+.nfs*

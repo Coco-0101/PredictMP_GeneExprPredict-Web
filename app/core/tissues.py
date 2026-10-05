@@ -1,4 +1,4 @@
-"""GTEx v8 tissue codes and gnomAD v4.1 reference populations used by PredictAP."""
+"""GTEx v8 tissue codes and gnomAD v4.1 reference populations used by PredictMP."""
 
 # x1..x49 = GTEx v8 tissues in alphabetical order (same order as PredictMP/data/tissue_index.txt)
 TISSUE_INDEX = {
@@ -31,7 +31,7 @@ TISSUE_INDEX = {
 TISSUE_NAME_TO_CODE = {v: k for k, v in TISSUE_INDEX.items()}
 TISSUES = sorted(TISSUE_INDEX.values())
 
-# Display label -> PredictAP population code
+# Display label -> PredictMP population code
 POPULATION_MAP = {
     "AFR (African)": "afr",
     "AMI (Amish)": "ami",

@@ -17,7 +17,7 @@ for d in tissue ks result_table; do
     [[ -d $REFERENCE_DATA/$d ]] || { echo "missing $REFERENCE_DATA/$d (run 08_build_package_data.py)" >&2; exit 1; }
 done
 
-echo "== PredictAP reference data -> $REMOTE/reference_data"
+echo "== PredictMP reference data -> $REMOTE/reference_data"
 rclone copy "$REFERENCE_DATA" "$REMOTE/reference_data" "${OPTS[@]}" \
     --include "tissue/*.parquet" --include "ks/*.parquet" --include "result_table/*.parquet"
 
