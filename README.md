@@ -24,7 +24,9 @@ PredictMP_GeneExprPredict-Web/
 │       ├── ga_pipeline.py      VCF → plink2 dosage → 預測 → 輸出檔
 │       └── ga_predict.py       權重 × dosage 的預測與 QC summary（也可單獨當 CLI 用）
 ├── wheels/                     PredictAP 套件安裝檔（.whl）
-├── tools/measure_upload.py     在自己電腦上量測上傳 / 預測時間的工具（不進 image）
+├── tools/
+│   ├── make_deploy_bundle.sh   打包部署到另一台主機需要的所有東西
+│   └── measure_upload.py       在自己電腦上量測上傳 / 預測時間的工具（不進 image）
 ├── sample_data/                測試用 VCF
 ├── Dockerfile, docker-compose.yml, entrypoint.sh, requirements.txt
 ├── .env.example                設定範本（複製成 .env 後修改）
@@ -82,6 +84,50 @@ docker compose up -d --build
 | 重建了 PredictAP 參考資料（08） | `docker compose restart`（清掉套件的記憶體快取） |
 | 看 log | `docker compose logs -f predictmp_geneexprpredict-web` |
 | 停止 | `docker compose down` |
+
+## 部署到另一台主機
+
+### 1. 在這台主機打包
+
+```bash
+bash tools/make_deploy_bundle.sh               # 輸出到 ../PredictMP_GeneExprPredict-Web_bundle_<日期>/
+bash tools/make_deploy_bundle.sh --no-image    # 新主機可以上網、要自己 build image 時
+```
+
+| 檔案 | 大小 | 內容 |
+|---|---|---|
+| `web_app.tar.gz` | < 1 MB | 目前 commit 的網站程式（含 PredictAP wheel；不含 `.env`、`sample_data/`） |
+| `reference_data/` | 約 12 GB | PredictAP 參考資料：`tissue/`、`result_table/*.parquet`、`ks/` |
+| `ga_weights/` | 約 105 MB | GA 權重資料庫（6 個 `.db`） |
+| `docker_image.tar.gz` | 約 350 MB | 已 build 好的 image（`--no-image` 時不產生） |
+| `SHA256SUMS` | — | 檢查碼，搬完後確認檔案沒壞 |
+
+不需要也不應該搬：使用者的 session 結果（volume）、`.env`、pipeline 的中間檔（`dosage/`、`results/`、gnomAD CSV）。
+
+### 2. 搬到新主機
+
+```bash
+rsync -avP PredictMP_GeneExprPredict-Web_bundle_<日期>/ <user>@<新主機>:/srv/predictmp/
+```
+
+### 3. 在新主機架設（需要 Docker + Docker Compose）
+
+```bash
+cd /srv/predictmp
+sha256sum -c SHA256SUMS                          # 確認檔案完整
+tar xzf web_app.tar.gz && cd PredictMP_GeneExprPredict-Web
+gunzip -c ../docker_image.tar.gz | docker load   # 有打包 image 時；沒有就跳過，下一步 --build 會自己 build
+
+cp .env.example .env
+# 修改 .env：
+#   PREDICTMP_REFERENCE_DATA_HOST_PATH=/srv/predictmp/reference_data
+#   GA_WEIGHTS_DB_HOST_PATH=/srv/predictmp/ga_weights
+#   PREDICTMP_UID / PREDICTMP_GID = 新主機上 `id` 的結果（這個使用者要能讀上面兩個資料夾）
+
+docker compose up -d            # 沒有載入 image 的話用 docker compose up -d --build
+```
+
+參考資料或權重更新時，只要把新的 `reference_data/` 或 `ga_weights/` 同步過去，再 `docker compose restart`。
 
 ## 資料保存與隱私
 
