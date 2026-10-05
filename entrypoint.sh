@@ -1,14 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-package_mount="${PREDICTAP_PACKAGE_MOUNT:-/pkg/PredictAP_python}"
-app_path="${PREDICTAP_APP_PATH:-/app/app/main.py}"
+app_path="${PREDICTMP_APP_PATH:-/app/app/main.py}"
 streamlit_port="${STREAMLIT_PORT:-8501}"
 max_upload_mb="${STREAMLIT_MAX_UPLOAD_MB:-500}"
 
-if [[ ! -f "$package_mount/PredictAP/__init__.py" ]]; then
-    echo "PredictAP package not found at $package_mount" >&2
-    echo "Check PREDICTAP_PACKAGE_DIR in .env." >&2
+if ! python -c "import PredictAP" 2>/dev/null; then
+    echo "PredictAP package is not installed in the image." >&2
+    echo "Build the wheel into wheels/ and rebuild (see README)." >&2
     exit 1
 fi
 
@@ -17,8 +16,16 @@ if [[ ! -f "$app_path" ]]; then
     exit 1
 fi
 
-# Match the old conda/PYTHONPATH launch without modifying the mounted package.
-export PYTHONPATH="$package_mount:/app/app${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="/app/app${PYTHONPATH:+:$PYTHONPATH}"
+
+# Delete session folders older than RESULTS_RETENTION_DAYS (default 7), once an hour
+(
+    cd /app/app
+    while true; do
+        python -m core.storage || true
+        sleep 3600
+    done
+) &
 
 exec python -m streamlit run "$app_path" \
     --server.port="$streamlit_port" \

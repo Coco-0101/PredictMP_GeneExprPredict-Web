@@ -6,23 +6,18 @@ Upload a genotype.vcf -> predict expression using GA-calibrated weights
 import os
 import time
 import streamlit as st
-import tempfile
 import pandas as pd
 from pathlib import Path
-import uuid
 from datetime import datetime
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from lib.genexpr_pipeline import GenexprPipeline, load_results
+from core.ga_pipeline import GAPipeline, load_results, EXPR_FILE, SUMMARY_FILE
+from core.storage import is_valid_session_id, new_session_id, session_dir
 
 # ─────────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────────
 WEIGHTS_DB = os.environ.get("GA_WEIGHTS_DB_PATH", "/ga_weights/V4_3Fold_Sign_weights.db")
 WEIGHT_COL = os.environ.get("GA_WEIGHT_COLUMN", "GA_W")
-RESULTS_DIR = os.environ.get("SAVE_TMP_DIR", "/app/save_tmp")
 PLINK2_CMD = os.environ.get("PLINK2_CMD", "plink2")
 
 # ─────────────────────────────────────────────────
@@ -167,8 +162,12 @@ with st.sidebar:
 
     if st.button("Load UUID", use_container_width=True):
         if uuid_input:
-            st.session_state.ga_uuid = uuid_input
-            st.rerun()
+            if is_valid_session_id(uuid_input):
+                st.session_state.ga_uuid = uuid_input.strip().lower()
+                st.session_state.ga_results = None
+                st.rerun()
+            else:
+                st.error("Invalid UUID format")
 
     st.divider()
 
@@ -190,7 +189,7 @@ with st.sidebar:
 
     # Auto-generate UUID when file is uploaded (if no UUID exists)
     if vcf_file and not st.session_state.ga_uuid:
-        st.session_state.ga_uuid = str(uuid.uuid4())
+        st.session_state.ga_uuid = new_session_id()
         st.rerun()
 
     auto_run = st.checkbox(
@@ -320,16 +319,15 @@ if run_analysis and vcf_file:
         st.divider()
 
         # Use session UUID for working directory
-        work_dir = os.path.join(RESULTS_DIR, st.session_state.ga_uuid)
-        os.makedirs(work_dir, exist_ok=True)
+        work_dir = str(session_dir(st.session_state.ga_uuid, create=True))
 
-        vcf_path = os.path.join(work_dir, vcf_file.name)
+        vcf_path = os.path.join(work_dir, Path(vcf_file.name).name)
         with open(vcf_path, "wb") as f:
             f.write(vcf_file.getbuffer())
 
         # Create pipeline with selected configuration
         try:
-            pipeline = GenexprPipeline(
+            pipeline = GAPipeline(
                 weights_db=selected_weight_db,
                 plink2_cmd=PLINK2_CMD,
                 weight_col=selected_weight_col,
@@ -393,9 +391,9 @@ if run_analysis and vcf_file:
 # Try to load results from disk if UUID is set but results not in memory
 # ─────────────────────────────────────────────────
 if st.session_state.ga_uuid and not st.session_state.ga_results:
-    work_dir = os.path.join(RESULTS_DIR, st.session_state.ga_uuid)
-    expr_path = os.path.join(work_dir, "predicted_predicted_expression.csv")
-    summary_path = os.path.join(work_dir, "predicted_summary.csv")
+    work_dir = session_dir(st.session_state.ga_uuid)
+    expr_path = str(work_dir / EXPR_FILE)
+    summary_path = str(work_dir / SUMMARY_FILE)
 
     if os.path.exists(expr_path) and os.path.exists(summary_path):
         try:

@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/pkg/PredictAP_python:/app/app
+    PYTHONPATH=/app/app
 
 WORKDIR /app
 
@@ -23,13 +23,17 @@ RUN cd /tmp && wget -q https://s3.amazonaws.com/plink2-assets/alpha5/plink2_linu
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# PredictAP package (wheel built from PredictMP/code/PredictAP_python, see README)
+COPY wheels/ /tmp/wheels/
+RUN pip install --no-cache-dir /tmp/wheels/predictap-*.whl && rm -rf /tmp/wheels
+
 # App source
 COPY app/ ./app/
 
-# Persistent results directory
-RUN mkdir -p /app/save_tmp
+# Per-session upload/result folders (Docker volume predictmp_session_results); writable by the non-root user
+RUN mkdir -p /app/session_results && chmod 1777 /app/session_results
 
-# Entrypoint installs PredictAP at startup from the mounted volume
+# Entrypoint checks PredictAP and starts Streamlit
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

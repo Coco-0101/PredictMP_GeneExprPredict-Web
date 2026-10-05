@@ -1,71 +1,22 @@
 """
-PredictMP Analysis - Multi-Population Prediction
+PredictMP Analysis - percentile rank of PrediXcan results against gnomAD v4.1 reference populations
 """
 
 import streamlit as st
 import pandas as pd
-import uuid
-import tempfile
-import os
 from datetime import datetime
-import sys
+from io import StringIO
 
-# Add PredictAP package to path
-sys.path.insert(0, os.environ.get("PREDICTAP_PACKAGE_MOUNT", "/pkg/PredictAP_python"))
+from core.storage import is_valid_session_id, new_session_id, session_dir
+from core.tissues import TISSUE_NAME_TO_CODE, TISSUES, POPULATION_MAP, POPULATIONS
 
 try:
     from PredictAP import rankcal
 except ImportError:
     rankcal = None
 
-# Tissue index mapping (from GTEx v8, 49 tissues)
-TISSUE_INDEX = {
-    "x1": "Adipose_Subcutaneous", "x2": "Adipose_Visceral_Omentum",
-    "x3": "Adrenal_Gland", "x4": "Artery_Aorta",
-    "x5": "Artery_Coronary", "x6": "Artery_Tibial",
-    "x7": "Brain_Amygdala", "x8": "Brain_Anterior_cingulate_cortex_BA24",
-    "x9": "Brain_Caudate_basal_ganglia", "x10": "Brain_Cerebellar_Hemisphere",
-    "x11": "Brain_Cerebellum", "x12": "Brain_Cortex",
-    "x13": "Brain_Frontal_Cortex_BA9", "x14": "Brain_Hippocampus",
-    "x15": "Brain_Hypothalamus", "x16": "Brain_Nucleus_accumbens_basal_ganglia",
-    "x17": "Brain_Putamen_basal_ganglia", "x18": "Brain_Spinal_cord_cervical_c-1",
-    "x19": "Brain_Substantia_nigra", "x20": "Breast_Mammary_Tissue",
-    "x21": "Cells_Cultured_fibroblasts", "x22": "Cells_EBV-transformed_lymphocytes",
-    "x23": "Colon_Sigmoid", "x24": "Colon_Transverse",
-    "x25": "Esophagus_Gastroesophageal_Junction", "x26": "Esophagus_Mucosa",
-    "x27": "Esophagus_Muscularis", "x28": "Heart_Atrial_Appendage",
-    "x29": "Heart_Left_Ventricle", "x30": "Kidney_Cortex",
-    "x31": "Liver", "x32": "Lung",
-    "x33": "Minor_Salivary_Gland", "x34": "Muscle_Skeletal",
-    "x35": "Nerve_Tibial", "x36": "Ovary",
-    "x37": "Pancreas", "x38": "Pituitary",
-    "x39": "Prostate", "x40": "Skin_Not_Sun_Exposed_Suprapubic",
-    "x41": "Skin_Sun_Exposed_Lower_leg", "x42": "Small_Intestine_Terminal_Ileum",
-    "x43": "Spleen", "x44": "Stomach",
-    "x45": "Testis", "x46": "Thyroid",
-    "x47": "Uterus", "x48": "Vagina",
-    "x49": "Whole_Blood",
-}
+RESULT_FILE = "predictmp_results.csv"
 
-# Reverse mapping: tissue name -> tissue code
-TISSUE_NAME_TO_CODE = {v: k for k, v in TISSUE_INDEX.items()}
-
-TISSUES = sorted(TISSUE_INDEX.values())
-
-# Population mapping
-POPULATION_MAP = {
-    "AFR (African)": "afr",
-    "AMI (Amish)": "ami",
-    "AMR (Admixed American)": "amr",
-    "ASJ (Ashkenazi Jewish)": "asj",
-    "EAS (East Asian)": "eas",
-    "FIN (Finnish)": "fin",
-    "MID (Middle Eastern)": "mid",
-    "NFE (Non-Finnish European)": "nfe",
-    "SAS (South Asian)": "sas"
-}
-
-POPULATIONS = list(POPULATION_MAP.keys())
 
 COLUMN_DESCRIPTIONS = {
     "FID": "Family ID from the user's data",
@@ -125,15 +76,12 @@ with st.sidebar:
 
     if st.button("Load UUID", use_container_width=True):
         if uuid_input:
-            st.session_state.predictmp_uuid = uuid_input
-            # Try to load results from saved CSV files
-            results_dir = os.path.join(RESULTS_DIR, uuid_input)
-            if os.path.exists(results_dir):
-                # Find CSV files matching this UUID
-                csv_files = [f for f in os.listdir(results_dir) if f.endswith('.csv')]
-                if csv_files:
-                    st.success(f"✅ Found {len(csv_files)} result file(s) for this UUID")
-            st.rerun()
+            if is_valid_session_id(uuid_input):
+                st.session_state.predictmp_uuid = uuid_input.strip().lower()
+                st.session_state.predictmp_results = None
+                st.rerun()
+            else:
+                st.error("Invalid UUID format")
 
     st.divider()
 
@@ -149,7 +97,7 @@ with st.sidebar:
 
     # Auto-generate UUID when file is uploaded (if no UUID exists)
     if uploaded_file and not st.session_state.predictmp_uuid:
-        st.session_state.predictmp_uuid = str(uuid.uuid4())
+        st.session_state.predictmp_uuid = new_session_id()
         st.rerun()
 
     if uploaded_file:
@@ -216,10 +164,10 @@ if run_analysis and uploaded_file:
 
         progress_text.write(f"Loading file and running PredictAP...")
 
-        # Read uploaded file as DataFrame
-        from io import StringIO
+        # Read uploaded file as DataFrame (PrediXcan output is tab-separated; .csv is comma-separated)
         stringio = StringIO(uploaded_file.getvalue().decode("utf8"))
-        input_df = pd.read_csv(stringio, sep='\t')
+        sep = "," if uploaded_file.name.lower().endswith(".csv") else "\t"
+        input_df = pd.read_csv(stringio, sep=sep)
 
         progress_text.write(f"Running PredictAP with tissue={tissue_code}, population={pop_code}...")
 
@@ -233,9 +181,7 @@ if run_analysis and uploaded_file:
         progress_text.success("Analysis complete!")
 
         # Save results to CSV for later reload
-        results_dir = os.path.join(RESULTS_DIR, st.session_state.predictmp_uuid)
-        os.makedirs(results_dir, exist_ok=True)
-        result_csv = os.path.join(results_dir, "predictmp_results.csv")
+        result_csv = session_dir(st.session_state.predictmp_uuid, create=True) / RESULT_FILE
         result_df.to_csv(result_csv, index=False)
 
         # Store results in session state
@@ -254,9 +200,8 @@ if run_analysis and uploaded_file:
 
 # Try to load results from disk if UUID is set but results not in memory
 if st.session_state.predictmp_uuid and not st.session_state.predictmp_results:
-    results_dir = os.path.join(RESULTS_DIR, st.session_state.predictmp_uuid)
-    result_csv = os.path.join(results_dir, "predictmp_results.csv")
-    if os.path.exists(result_csv):
+    result_csv = session_dir(st.session_state.predictmp_uuid) / RESULT_FILE
+    if result_csv.exists():
         try:
             loaded_df = pd.read_csv(result_csv)
             st.session_state.predictmp_results = {

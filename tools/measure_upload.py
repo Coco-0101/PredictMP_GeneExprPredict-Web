@@ -2,7 +2,7 @@
 measure_upload.py
 ------------------
 Run this on your LOCAL Windows machine (not on the remote Linux server).
-It drives a real browser to open the PredictAP web app, upload a VCF file,
+It drives a real browser to open the PredictMP web app, upload a VCF file,
 and measures how long the browser-side upload actually takes -- then
 optionally waits for prediction to finish and reports total time.
 
