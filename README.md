@@ -25,7 +25,7 @@ PredictMP_GeneExprPredict-Web/
 │       └── ga_predict.py       權重 × dosage 的預測與 QC summary（也可單獨當 CLI 用）
 ├── wheels/                     PredictAP 套件安裝檔（.whl）
 ├── tools/
-│   ├── make_deploy_bundle.sh   打包部署到另一台主機需要的所有東西
+│   ├── upload_data.sh          把參考資料和 GA 權重上傳到 Google Drive（部署到另一台主機用）
 │   └── measure_upload.py       在自己電腦上量測上傳 / 預測時間的工具（不進 image）
 ├── sample_data/                測試用 VCF
 ├── Dockerfile, docker-compose.yml, entrypoint.sh, requirements.txt
@@ -87,47 +87,56 @@ docker compose up -d --build
 
 ## 部署到另一台主機
 
-### 1. 在這台主機打包
+兩台主機在不同 VPN、彼此連不到時，用 Google Drive 當中繼：這台上傳，新主機下載。
+
+| 東西 | 怎麼到新主機 |
+|---|---|
+| 網站程式（含 PredictAP wheel） | GitHub：`git clone` |
+| Docker image | 不傳，新主機用 `docker compose up -d --build` 自己 build（需要能上網） |
+| PredictAP 參考資料（約 12 GB）、GA 權重（約 105 MB） | Google Drive + rclone |
+| `.env` | 不傳，在新主機依 `.env.example` 重寫 |
+| 使用者的 session 結果 | 不傳 |
+
+### 1. 設定 rclone 的 Google Drive（兩台主機各做一次）
+
+伺服器沒有瀏覽器，授權要借用有瀏覽器的電腦：
+
+1. 在**有瀏覽器的電腦**安裝 rclone（<https://rclone.org/downloads/>），執行 `rclone authorize "drive"`，登入 Google 後，終端機會印出一段 token（`{"access_token":...}`）。
+2. 在**伺服器**執行 `rclone config`：
+   - `n`（New remote）→ name 輸入 `gdrive` → storage 選 `drive`
+   - `client_id`、`client_secret` 直接 Enter → scope 選 `1`（Full access）→ 其餘 Enter
+   - `Use web browser to automatically authenticate?` 選 **`n`**，貼上第 1 步的 token
+   - `Configure this as a Shared Drive?` 選 `n` → `y` 儲存
+3. 測試：`rclone lsd gdrive:`
+
+### 2. 這台主機：上傳
 
 ```bash
-bash tools/make_deploy_bundle.sh               # 輸出到 ../PredictMP_GeneExprPredict-Web_bundle_<日期>/
-bash tools/make_deploy_bundle.sh --no-image    # 新主機可以上網、要自己 build image 時
+conda deactivate                     # p_env 的函式庫會干擾 rclone/ssh 的連線
+bash tools/upload_data.sh gdrive:PredictMP_GeneExprPredict-Web
 ```
 
-| 檔案 | 大小 | 內容 |
-|---|---|---|
-| `web_app.tar.gz` | < 1 MB | 目前 commit 的網站程式（含 PredictAP wheel；不含 `.env`、`sample_data/`） |
-| `reference_data/` | 約 12 GB | PredictAP 參考資料：`tissue/`、`result_table/*.parquet`、`ks/` |
-| `ga_weights/` | 約 105 MB | GA 權重資料庫（6 個 `.db`） |
-| `docker_image.tar.gz` | 約 350 MB | 已 build 好的 image（`--no-image` 時不產生） |
-| `SHA256SUMS` | — | 檢查碼，搬完後確認檔案沒壞 |
+只上傳網站要用的 parquet 和 `.db`，傳完會自動比對檢查碼。中斷了重跑同一行就會接著傳；資料更新後重跑，只會傳有變動的檔案。
 
-不需要也不應該搬：使用者的 session 結果（volume）、`.env`、pipeline 的中間檔（`dosage/`、`results/`、gnomAD CSV）。
-
-### 2. 搬到新主機
+### 3. 新主機：下載並架設（需要 Docker + Docker Compose）
 
 ```bash
-rsync -avP PredictMP_GeneExprPredict-Web_bundle_<日期>/ <user>@<新主機>:/srv/predictmp/
-```
+DEST=/srv/predictmp
+mkdir -p $DEST && cd $DEST
+git clone https://github.com/Coco-0101/PredictMP_GeneExprPredict-Web.git
+rclone copy gdrive:PredictMP_GeneExprPredict-Web/reference_data $DEST/reference_data -P
+rclone copy gdrive:PredictMP_GeneExprPredict-Web/ga_weights     $DEST/ga_weights     -P
 
-### 3. 在新主機架設（需要 Docker + Docker Compose）
-
-```bash
-cd /srv/predictmp
-sha256sum -c SHA256SUMS                          # 確認檔案完整
-tar xzf web_app.tar.gz && cd PredictMP_GeneExprPredict-Web
-gunzip -c ../docker_image.tar.gz | docker load   # 有打包 image 時；沒有就跳過，下一步 --build 會自己 build
-
+cd PredictMP_GeneExprPredict-Web
 cp .env.example .env
 # 修改 .env：
 #   PREDICTMP_REFERENCE_DATA_HOST_PATH=/srv/predictmp/reference_data
 #   GA_WEIGHTS_DB_HOST_PATH=/srv/predictmp/ga_weights
 #   PREDICTMP_UID / PREDICTMP_GID = 新主機上 `id` 的結果（這個使用者要能讀上面兩個資料夾）
-
-docker compose up -d            # 沒有載入 image 的話用 docker compose up -d --build
+docker compose up -d --build
 ```
 
-參考資料或權重更新時，只要把新的 `reference_data/` 或 `ga_weights/` 同步過去，再 `docker compose restart`。
+參考資料或權重更新時：這台重跑 `upload_data.sh`，新主機重跑兩行 `rclone copy`，再 `docker compose restart`。
 
 ## 資料保存與隱私
 
