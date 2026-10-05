@@ -112,7 +112,6 @@ docker compose up -d --build
 ### 2. 這台主機：上傳
 
 ```bash
-conda deactivate                     # p_env 的函式庫會干擾 rclone/ssh 的連線
 bash tools/upload_data.sh gdrive:PredictMP_GeneExprPredict-Web
 ```
 
