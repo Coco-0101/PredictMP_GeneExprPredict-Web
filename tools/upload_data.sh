@@ -11,7 +11,7 @@ set -euo pipefail
 REMOTE=${1:?usage: bash tools/upload_data.sh <rclone-remote:path>}
 REFERENCE_DATA=${REFERENCE_DATA:-/mnt/data_40T/betty0101/Project/PredictMP/data}
 GA_WEIGHTS=${GA_WEIGHTS:-/mnt/data_40T/anywaycheng/UploadFile/GA/GA_Weight_DataBase}
-OPTS=(--progress --transfers 4 --checksum --drive-chunk-size 64M)   # 64M chunks: ~7x faster than the 8M default here
+OPTS=(--progress --transfers 16 --checksum --drive-chunk-size 32M)   # Drive finalizes each file slowly; many parallel transfers hide that wait
 
 for d in tissue ks result_table; do
     [[ -d $REFERENCE_DATA/$d ]] || { echo "missing $REFERENCE_DATA/$d (run 08_build_package_data.py)" >&2; exit 1; }
