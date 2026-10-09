@@ -2,6 +2,8 @@
 PredictMP Analysis - percentile rank of PrediXcan results against gnomAD v4.1 reference populations
 """
 
+import json
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -9,6 +11,7 @@ from io import StringIO
 
 from core.storage import is_valid_session_id, new_session_id, session_dir
 from core.tissues import TISSUE_NAME_TO_CODE, TISSUES, POPULATION_MAP, POPULATIONS
+from ui import paginate_dataframe, retention_notice
 
 try:
     from PredictMP import rankcal
@@ -16,6 +19,7 @@ except ImportError:
     rankcal = None
 
 RESULT_FILE = "predictmp_results.csv"
+META_FILE = "predictmp_meta.json"   # tissue / population chosen for the run
 
 
 COLUMN_DESCRIPTIONS = {
@@ -34,7 +38,7 @@ def get_column_descriptions(population_code):
     """Get column descriptions with dynamic population comparison"""
     descriptions = COLUMN_DESCRIPTIONS.copy()
     pop_label = population_code.upper()
-    descriptions[f"NFE.{pop_label}.mean.diff"] = f"Mean differences between NFE and {pop_label} reference populations"
+    descriptions[f"NFE.{pop_label}.mean.diff"] = f"Mean differences between {pop_label} and NFE reference populations"
     return descriptions
 
 st.set_page_config(
@@ -57,16 +61,24 @@ if "predictmp_uuid" not in st.session_state:
     st.session_state.predictmp_uuid = None
 if "predictmp_results" not in st.session_state:
     st.session_state.predictmp_results = None
+if "predictmp_auto_run_done_key" not in st.session_state:
+    st.session_state.predictmp_auto_run_done_key = None
 
 # ─────────────────────────────────────────────────
 # Sidebar Configuration
 # ─────────────────────────────────────────────────
 with st.sidebar:
-    st.subheader("Session UUID")
+    # Session UUID header with native Streamlit help icon
+    st.subheader(
+        "Session UUID",
+        help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
+    )
+    retention_notice()
 
     # Display current UUID if exists
     if st.session_state.predictmp_uuid:
         st.info(f"{st.session_state.predictmp_uuid}")
+        st.caption(":red[**Copy and save this UUID to reload results later.**]")
 
     uuid_input = st.text_input(
         "UUID",
@@ -85,13 +97,10 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("New Analysis")
-
-    st.write("**Upload PrediXcan result (.txt / .csv)**")
+    st.subheader("Input")
     uploaded_file = st.file_uploader(
-        "Upload file",
+        "Upload PrediXcan result (.txt / .csv)",
         type=["txt", "csv"],
-        label_visibility="collapsed",
         accept_multiple_files=False
     )
 
@@ -100,33 +109,52 @@ with st.sidebar:
         st.session_state.predictmp_uuid = new_session_id()
         st.rerun()
 
-    if uploaded_file:
-        st.caption(f"{uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.1f} MB)")
-
-    st.write("**Tissue type**")
-    tissue_type = st.selectbox(
-        "Select tissue",
-        TISSUES,
-        label_visibility="collapsed"
+    auto_run = st.checkbox(
+        "Auto-run analysis after upload completes",
+        value=False,
+        help="When enabled, analysis starts automatically as soon as the file finishes uploading, using the tissue type and population selected below -- no need to click Run PredictMP"
     )
 
-    st.write("**Reference population**")
+    st.divider()
+    st.subheader("Configuration")
+
+    tissue_type = st.selectbox(
+        "Tissue Type",
+        TISSUES,
+        help="GTEx tissue of the PrediXcan model that produced your predicted expression"
+    )
+
     population = st.selectbox(
-        "Select population",
+        "Reference Population",
         POPULATIONS,
-        label_visibility="collapsed"
+        help="gnomAD v4.1 population whose simulated distribution is used for percentile ranks"
     )
 
     st.divider()
 
     run_button_disabled = not uploaded_file or not st.session_state.predictmp_uuid
-    run_analysis = st.button(
+    manual_run = st.button(
         "Run PredictMP",
         width="stretch",
         type="primary",
         disabled=run_button_disabled,
-        help="Upload file first" if run_button_disabled else "Click to run analysis"
+        help="Select a PrediXcan result file first" if run_button_disabled else "Click to start"
     )
+
+# Run either when the button is clicked, or when auto-run is on and this
+# upload has not been analysed yet (so it does not re-run on every rerun).
+# The upload is only marked as analysed once a run finishes or fails: if the
+# user changes a setting mid-run, Streamlit interrupts the run, and the rerun
+# auto-runs again with the new setting instead of silently dropping it.
+# Keys are prefixed so they do not collide with the GA page's session state.
+file_key = f"{uploaded_file.name}_{uploaded_file.size}" if uploaded_file else None
+should_auto_run = (
+    auto_run
+    and file_key is not None
+    and st.session_state.predictmp_uuid is not None
+    and file_key != st.session_state.predictmp_auto_run_done_key
+)
+run_analysis = manual_run or should_auto_run
 
 # ─────────────────────────────────────────────────
 # Main Content
@@ -136,7 +164,10 @@ st.write("**Predict Multi-Population**")
 
 # Show file selection status (hide when running analysis)
 if uploaded_file and not run_analysis:
-    st.info(f"PrediXcan result selected: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.1f} MB)\n\nClick **Run PredictMP** button in the sidebar to start")
+    if auto_run:
+        st.info(f"PrediXcan result selected: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.1f} MB)\n\nAuto-run has already analysed this file. Change the settings and click **Run PredictMP** to run again.")
+    else:
+        st.info(f"PrediXcan result selected: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.1f} MB)\n\nClick **Run PredictMP** button in the sidebar to start")
 elif not uploaded_file and not run_analysis:
     st.info("Use the sidebar to upload analysis data, select tissue type and population, then click **Run PredictMP**.")
 
@@ -181,32 +212,53 @@ if run_analysis and uploaded_file:
         progress_text.success("Analysis complete!")
 
         # Save results to CSV for later reload
-        result_csv = session_dir(st.session_state.predictmp_uuid, create=True) / RESULT_FILE
-        result_df.to_csv(result_csv, index=False)
-
-        # Store results in session state
-        st.session_state.predictmp_results = {
+        work_dir = session_dir(st.session_state.predictmp_uuid, create=True)
+        result_df.to_csv(work_dir / RESULT_FILE, index=False)
+        meta = {
             "tissue": tissue_type,
             "tissue_code": tissue_code,
             "population": population,
             "population_code": pop_code,
+        }
+        (work_dir / META_FILE).write_text(json.dumps(meta))
+
+        # Store results in session state
+        st.session_state.predictmp_results = {
+            **meta,
             "uuid": st.session_state.predictmp_uuid,
             "dataframe": result_df,
         }
+        st.session_state.predictmp_auto_run_done_key = file_key
 
     except Exception as e:
+        st.session_state.predictmp_auto_run_done_key = file_key
         st.error(f"Analysis failed: {str(e)}")
         st.stop()
 
 # Try to load results from disk if UUID is set but results not in memory
 if st.session_state.predictmp_uuid and not st.session_state.predictmp_results:
-    result_csv = session_dir(st.session_state.predictmp_uuid) / RESULT_FILE
+    work_dir = session_dir(st.session_state.predictmp_uuid)
+    result_csv = work_dir / RESULT_FILE
     if result_csv.exists():
         try:
             loaded_df = pd.read_csv(result_csv)
+            meta_path = work_dir / META_FILE
+            if meta_path.exists():
+                meta = json.loads(meta_path.read_text())
+            else:
+                # Sessions saved before the meta file existed: the population can
+                # be recovered from the "NFE.{POP}.mean.diff" column (absent for
+                # NFE itself); the tissue cannot.
+                diff_cols = [c for c in loaded_df.columns if c.startswith("NFE.") and c.endswith(".mean.diff")]
+                pop_code = diff_cols[0].split(".")[1].lower() if diff_cols else "nfe"
+                code_to_pop = {code: name for name, code in POPULATION_MAP.items()}
+                meta = {
+                    "tissue": "Unknown",
+                    "population": code_to_pop.get(pop_code, pop_code.upper()),
+                    "population_code": pop_code,
+                }
             st.session_state.predictmp_results = {
-                "tissue": "Unknown",
-                "population": "Unknown",
+                **meta,
                 "uuid": st.session_state.predictmp_uuid,
                 "dataframe": loaded_df,
             }
@@ -221,9 +273,10 @@ if st.session_state.predictmp_results:
 
     st.divider()
 
-    # Title with timestamp
+    # Title with tissue, population and timestamp (same pattern as the download file name)
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    st.subheader(f"Predict_{results['tissue']}_{timestamp}.csv")
+    pop_display = results['population'].split(' ')[0]  # e.g., "AFR (African)" -> "AFR"
+    st.subheader(f"Predict_{results['tissue']}_{pop_display}_{timestamp}.csv")
 
     # Metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -248,9 +301,6 @@ if st.session_state.predictmp_results:
             st.metric("KS Significant genes", f"{ks_significant:,} / {n_genes:,}")
         else:
             st.metric("KS Significant genes", "N/A (NFE reference)")
-
-    # UUID info with red color
-    st.markdown(f"<div style='background-color: #1e3a5f; padding: 15px; border-radius: 5px;'><span style='color: #ff4444; font-weight: bold;'>Session UUID: {results['uuid']}</span><br><span style='color: #88ccee;'>Save this to reload results later</span></div>", unsafe_allow_html=True)
 
     # Filter results
     with st.expander("Filter results", expanded=True):
@@ -281,11 +331,6 @@ if st.session_state.predictmp_results:
         if search_gene:
             filtered_df = filtered_df[filtered_df["gene"].str.contains(search_gene, case=False, na=False)]
 
-    # Results message
-    n_total = len(df)
-    n_displayed = len(filtered_df)
-    st.info(f"Showing {min(n_displayed, 5000):,} of {n_total:,} rows. Use filters above to narrow down, or download for the full dataset.")
-
     # Results table with help
     st.write("**Results**")
 
@@ -301,22 +346,28 @@ if st.session_state.predictmp_results:
                 help=column_descriptions[col]
             )
 
+    # Paginate: show 500 rows per page instead of the whole table
+    page_df, page_num, total_pages = paginate_dataframe(
+        filtered_df, key="predictmp", page_size=500
+    )
     st.dataframe(
-        filtered_df.head(5000),
+        page_df,
         column_config=col_configs,
         width="stretch",
+        height=400,
         hide_index=False
     )
 
-    # Download button
+    # Download section -- downloads only the currently displayed page,
+    # not the full dataset
     st.divider()
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    csv = df.to_csv(index=False)
-    # Extract population name (remove description)
-    pop_display = results['population'].split(' ')[0]  # e.g., "AFR (African)" -> "AFR"
+    st.write(f"**Download** (page {page_num} of {total_pages})")
+
     st.download_button(
-        label="Download Results (CSV)",
-        data=csv,
-        file_name=f"Predict_{results['tissue']}_{pop_display}_{timestamp}.csv",
-        mime="text/csv"
+        label=f"Download Results — Page {page_num} (CSV)",
+        data=page_df.to_csv(index=False),
+        file_name=f"Predict_{results['tissue']}_{pop_display}_page{page_num}_{timestamp}.csv",
+        mime="text/csv",
+        width="stretch",
+        on_click="ignore",  # downloading must not rerun the (large) page
     )

@@ -12,6 +12,7 @@ from datetime import datetime
 
 from core.ga_pipeline import GAPipeline, load_results, EXPR_FILE, SUMMARY_FILE
 from core.storage import is_valid_session_id, new_session_id, session_dir
+from ui import paginate_dataframe, retention_notice
 
 # ─────────────────────────────────────────────────
 # Configuration
@@ -48,12 +49,16 @@ EXPR_COLUMN_HELP = {
 
 QC_COLUMN_HELP = {
     "gene": "Ensembl gene ID",
-    "n_snps_in_model": "Number of SNPs in the gene model",
+    "n_snps_in_model": "Number of SNPs with a non-zero weight in the selected model",
     "n_snps_used": "Number of SNPs actually used in prediction",
-    "pct_snps_used": "Percentage of model SNPs found in VCF",
+    "pct_snps_used": "Fraction of model SNPs found in the VCF (0–1); below 0.5 is flagged WARNING",
     "pred_mean": "Mean of predicted expression",
     "pred_sd": "Standard deviation of predicted expression",
-    "var_g": "Genetic variance explained",
+    "var_g": "Variance of predicted expression across the uploaded samples (pred_sd²); 0 means NO_VARIANCE",
+    "avg_confidence_score": "Mean confidence score of the model SNPs found in the VCF",
+    "train_corr": "Gene's correlation in GA training",
+    "corr_after_GA": "Gene's correlation after GA calibration",
+    "n_snps": "SNPs for this gene in GA training, including pruned ones",
     "status": "Prediction status indicator",
 }
 
@@ -61,7 +66,7 @@ QC_COLUMN_HELP = {
 STATUS_DISPLAY_MAP = {
     "OK": {
         "display_name": "PASS",
-        "help": "SNP coverage ≥50%, high confidence"
+        "help": "SNP coverage ≥50%"
     },
     "LOW_SNP_COVERAGE": {
         "display_name": "WARNING",
@@ -110,32 +115,6 @@ def get_available_weights():
         return db_files
     return []
 
-def get_status_display_name(status_code: str) -> str:
-    """Convert internal status code to display name"""
-    return STATUS_DISPLAY_MAP.get(status_code, {}).get("display_name", status_code)
-
-def paginate_dataframe(df: pd.DataFrame, key: str, page_size: int = 500):
-    """Show a page-number control and return (page_df, page_num, total_pages)."""
-    total_rows = len(df)
-    total_pages = max(1, -(-total_rows // page_size))  # ceil division
-
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        page = st.number_input(
-            "Page",
-            min_value=1,
-            max_value=total_pages,
-            value=1,
-            step=1,
-            key=f"{key}_page",
-        )
-    start = (page - 1) * page_size
-    end = min(start + page_size, total_rows)
-    with col2:
-        st.caption(f"Showing rows {start + 1}-{end} of {total_rows} (page {page} of {total_pages})")
-
-    return df.iloc[start:end], page, total_pages
-
 available_dbs = get_available_weights()
 selected_weight_db = None
 selected_weight_col = None
@@ -149,10 +128,12 @@ with st.sidebar:
         "Session UUID",
         help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
+    retention_notice()
 
     # Display current UUID if exists
     if st.session_state.ga_uuid:
         st.info(f"{st.session_state.ga_uuid}")
+        st.caption(":red[**Copy and save this UUID to reload results later.**]")
 
     uuid_input = st.text_input(
         "UUID",
@@ -194,7 +175,7 @@ with st.sidebar:
 
     auto_run = st.checkbox(
         "Auto-run prediction after upload completes",
-        value=True,
+        value=False,
         help="When enabled, prediction starts automatically as soon as the file finishes uploading -- no need to click Run Prediction"
     )
 
@@ -248,8 +229,8 @@ with st.sidebar:
                 st.warning(f"⚠️ Database not found: {db_filename}")
                 st.info(f"Available databases: {', '.join(available_dbs) if available_dbs else 'None'}")
     else:
-        # For PrediXcan_W, use the built-in database without selection
-        st.success("✓ Using built-in Original PrediXcan Weight database")
+        # For PrediXcan_W, use the original weights stored in the same database
+        st.success("✓ Using original PrediXcan weights")
         selected_weight_db = WEIGHTS_DB
 
     st.divider()
@@ -283,8 +264,10 @@ should_auto_run = (
 run_analysis = (manual_run or should_auto_run) and not st.session_state.is_processing
 
 if run_analysis and vcf_file:
-    # Mark this file as processed so auto-run doesn't re-trigger on every rerun
-    st.session_state.auto_run_done_key = current_file_key
+    # The file is marked as processed (so auto-run doesn't re-trigger on every
+    # rerun) only once the run finishes or fails. If the user changes a setting
+    # mid-run, Streamlit interrupts the run and the rerun auto-runs again with
+    # the new setting instead of silently dropping it.
     st.session_state.is_processing = True
 
 
@@ -333,6 +316,7 @@ if run_analysis and vcf_file:
                 weight_col=selected_weight_col,
             )
         except Exception as e:
+            st.session_state.auto_run_done_key = current_file_key
             st.error(f"Failed to initialize pipeline: {e}")
             st.stop()
 
@@ -379,8 +363,10 @@ if run_analysis and vcf_file:
                 "summary_df": summary_df,
                 "session_uuid": st.session_state.ga_uuid,
             }
+            st.session_state.auto_run_done_key = current_file_key
 
         except Exception as e:
+            st.session_state.auto_run_done_key = current_file_key
             st.error(f"Prediction failed: {e}")
             st.session_state.error = str(e)
             st.stop()
@@ -434,14 +420,6 @@ if st.session_state.ga_results:
         n_warning = (summary_df["status"] == "LOW_SNP_COVERAGE").sum()
         st.metric("WARNING", n_warning)
 
-    # Status distribution
-    st.subheader("Prediction Status Distribution")
-    status_counts = summary_df["status"].value_counts()
-    status_display = {status: get_status_display_name(status) for status in status_counts.index}
-    status_counts_display = status_counts.rename(index=status_display)
-    status_counts_display = status_counts_display.sort_index()
-    st.bar_chart(status_counts_display)
-
     # Summary stats
     st.subheader("Detailed Results")
     tabs = st.tabs(["Predicted Expression", "Predicted Summary", "Status Codes"])
@@ -482,18 +460,20 @@ if st.session_state.ga_results:
 
         csv_data = expr_page_display.to_csv()
         st.download_button(
-            label=f"⬇️ Download Predicted Expression — Page {expr_page_num} (CSV)",
+            label=f"Download Predicted Expression — Page {expr_page_num} (CSV)",
             data=csv_data,
             file_name=f"predicted_expression_page{expr_page_num}_{timestamp}.csv",
             mime="text/csv",
-            width="stretch"
+            width="stretch",
+            on_click="ignore",  # downloading must not rerun the (large) page
         )
 
     with tabs[1]:
         st.write(f"**Gene QC Metrics** ({len(summary_df)} genes)")
         display_cols = [
             "gene", "n_snps_in_model", "n_snps_used", "pct_snps_used",
-            "pred_mean", "pred_sd", "var_g", "status"
+            "pred_mean", "pred_sd", "var_g", "avg_confidence_score",
+            "train_corr", "corr_after_GA", "n_snps", "status"
         ]
         display_cols = [c for c in display_cols if c in summary_df.columns]
 
@@ -520,11 +500,12 @@ if st.session_state.ga_results:
 
         csv_data = summary_page.to_csv(index=False)
         st.download_button(
-            label=f"⬇️ Download Predicted Summary — Page {summary_page_num} (CSV)",
+            label=f"Download Predicted Summary — Page {summary_page_num} (CSV)",
             data=csv_data,
             file_name=f"predicted_summary_page{summary_page_num}_{timestamp}.csv",
             mime="text/csv",
-            width="stretch"
+            width="stretch",
+            on_click="ignore",  # downloading must not rerun the (large) page
         )
 
     with tabs[2]:
@@ -552,8 +533,3 @@ if st.session_state.ga_results:
                 "Description": st.column_config.TextColumn(width="large"),
             }
         )
-
-    st.divider()
-    st.subheader("Session UUID")
-    st.info("Copy and save this to reload results later")
-    st.code(st.session_state.ga_uuid, language="text")

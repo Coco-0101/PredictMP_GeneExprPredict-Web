@@ -12,7 +12,7 @@ st.title("Privacy & Data Retention")
 
 st.markdown(f"""
 ### What we store
-- Files you upload (PrediXcan results or VCF genotype files) and the results computed from them
+- Files you upload and the results computed from them
   are saved on our server in a folder named by a random **Session UUID**.
 - We do not ask for your name, e-mail, or any account information, and we do not use cookies for tracking.
 

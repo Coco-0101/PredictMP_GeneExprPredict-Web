@@ -33,6 +33,7 @@ TISSUES = sorted(TISSUE_INDEX.values())
 
 # Display label -> PredictMP population code
 POPULATION_MAP = {
+    "NFE (Non-Finnish European) — baseline, no comparison": "nfe",
     "AFR (African)": "afr",
     "AMI (Amish)": "ami",
     "AMR (Admixed American)": "amr",
@@ -40,7 +41,6 @@ POPULATION_MAP = {
     "EAS (East Asian)": "eas",
     "FIN (Finnish)": "fin",
     "MID (Middle Eastern)": "mid",
-    "NFE (Non-Finnish European)": "nfe",
     "SAS (South Asian)": "sas",
 }
 POPULATIONS = list(POPULATION_MAP)
