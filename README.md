@@ -196,7 +196,7 @@ docker compose up -d --build
 |---|---|
 | GA-Calibrated Weights → Sign-flipped（建議） | `V4_LOOCV_Sign_weights.db` |
 | GA-Calibrated Weights → Unsigned | `V4_LOOCV_Unsign_weights.db` |
-| Original PrediXcan Weight | `.env` 的 `GA_WEIGHTS_DB_PATH` |
+| Original PrediXcan Weight | `.env` 的 `GA_WEIGHTS_DB_PATH`（預設 `V4_LOOCV_Sign_weights.db`）的 `PrediXcan_W` 欄。6 個資料庫的 `PrediXcan_W` 完全相同，只是原始 GTEx v7 權重中有跑過 GA 的 4,782 個基因 |
 
 ### 流程
 

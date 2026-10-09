@@ -16,7 +16,7 @@ from core.storage import is_valid_session_id, new_session_id, session_dir
 # ─────────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────────
-WEIGHTS_DB = os.environ.get("GA_WEIGHTS_DB_PATH", "/ga_weights/V4_3Fold_Sign_weights.db")
+WEIGHTS_DB = os.environ.get("GA_WEIGHTS_DB_PATH", "/ga_weights/V4_LOOCV_Sign_weights.db")
 WEIGHT_COL = os.environ.get("GA_WEIGHT_COLUMN", "GA_W")
 PLINK2_CMD = os.environ.get("PLINK2_CMD", "plink2")
 

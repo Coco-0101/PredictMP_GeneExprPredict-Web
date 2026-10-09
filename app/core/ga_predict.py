@@ -26,7 +26,7 @@ Typical usage
 -------------
 python3 ga_predict.py \
     --dosage_raw dosage_matrix.raw \
-    --weights_db V4_3Fold_Sign_weights.db \
+    --weights_db V4_LOOCV_Sign_weights.db \
     --out_prefix ga
 """
 
