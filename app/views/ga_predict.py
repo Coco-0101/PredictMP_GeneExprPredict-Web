@@ -441,6 +441,9 @@ if st.session_state.ga_results:
     results = st.session_state.ga_results
     expr_df = results["expr_df"]
     summary_df = results["summary_df"]
+    # Time the prediction finished, i.e. when its output file was written;
+    # used in the download file names
+    completed_at = datetime.fromtimestamp(os.path.getmtime(results["expr_path"])).strftime('%Y-%m-%d_%H-%M-%S')
 
     st.divider()
 
@@ -495,7 +498,7 @@ if st.session_state.ga_results:
         st.divider()
         st.write(f"**Download** (page {expr_page_num} of {expr_total_pages})")
 
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp = completed_at
 
         csv_data = expr_page_display.to_csv()
         st.download_button(
@@ -535,7 +538,7 @@ if st.session_state.ga_results:
         st.divider()
         st.write(f"**Download** (page {summary_page_num} of {summary_total_pages})")
 
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp = completed_at
 
         csv_data = summary_page.to_csv(index=False)
         st.download_button(

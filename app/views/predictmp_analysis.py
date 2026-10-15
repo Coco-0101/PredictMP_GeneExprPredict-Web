@@ -325,8 +325,10 @@ if st.session_state.predictmp_results:
 
     st.divider()
 
-    # Title with tissue, population and timestamp (same pattern as the download file name)
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    # Title with tissue, population and the time the analysis finished, i.e. when
+    # its result file was written (same pattern as the download file name)
+    result_mtime = (session_dir(results["uuid"]) / RESULT_FILE).stat().st_mtime
+    timestamp = datetime.fromtimestamp(result_mtime).strftime('%Y-%m-%d_%H-%M-%S')
     pop_display = results['population'].split(' ')[0]  # e.g., "AFR (African)" -> "AFR"
     st.subheader(f"Predict_{results['tissue']}_{pop_display}_{timestamp}.csv")
 
