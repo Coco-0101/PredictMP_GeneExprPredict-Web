@@ -7,17 +7,17 @@ import streamlit as st
 
 pages = [
     st.Page(
-        "pages/predictmp_analysis.py",
+        "views/predictmp_analysis.py",
         title="PredictMP Analysis",
         icon="📊",
     ),
     st.Page(
-        "pages/ga_predict.py",
+        "views/ga_predict.py",
         title="GA-Calibrated Gene Expression Prediction",
         icon="🧬",
     ),
     st.Page(
-        "pages/privacy.py",
+        "views/privacy.py",
         title="Privacy & Data Retention",
         icon="🔒",
     ),

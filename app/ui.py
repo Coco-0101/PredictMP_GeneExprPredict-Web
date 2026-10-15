@@ -6,11 +6,13 @@ import streamlit as st
 from core.storage import RETENTION_DAYS
 
 
-def retention_notice():
-    """Caption telling users how long uploads and results are kept."""
-    st.caption(
-        f"Uploaded files and results are deleted automatically after "
-        f"{RETENTION_DAYS:g} days. See *Privacy & Data Retention*."
+def retention_consent(key: str) -> bool:
+    """Checkbox the user must tick before running an analysis."""
+    return st.checkbox(
+        f"I understand that uploaded files and results are deleted automatically "
+        f"after {RETENTION_DAYS:g} days.",
+        key=key,
+        help="See *Privacy & Data Retention* for what is stored and how it is removed",
     )
 
 
@@ -36,6 +38,6 @@ def paginate_dataframe(df: pd.DataFrame, key: str, page_size: int = 500):
     start = (page - 1) * page_size
     end = min(start + page_size, total_rows)
     with col2:
-        st.caption(f"Showing rows {start + 1}-{end} of {total_rows} (page {page} of {total_pages})")
+        st.caption(f"Showing rows {start + 1:,}-{end:,} of {total_rows:,} (page {page:,} of {total_pages:,})")
 
     return df.iloc[start:end], page, total_pages

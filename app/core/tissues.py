@@ -31,9 +31,9 @@ TISSUE_INDEX = {
 TISSUE_NAME_TO_CODE = {v: k for k, v in TISSUE_INDEX.items()}
 TISSUES = sorted(TISSUE_INDEX.values())
 
-# Display label -> PredictMP population code
+# Display label -> PredictMP population code. NFE is the comparison baseline
+# and is not offered as a choice (reference data for it still exists).
 POPULATION_MAP = {
-    "NFE (Non-Finnish European) — baseline, no comparison": "nfe",
     "AFR (African)": "afr",
     "AMI (Amish)": "ami",
     "AMR (Admixed American)": "amr",

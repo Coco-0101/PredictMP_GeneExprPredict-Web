@@ -12,7 +12,7 @@ from datetime import datetime
 
 from core.ga_pipeline import GAPipeline, load_results, EXPR_FILE, SUMMARY_FILE
 from core.storage import is_valid_session_id, new_session_id, session_dir
-from ui import paginate_dataframe, retention_notice
+from ui import paginate_dataframe, retention_consent
 
 # ─────────────────────────────────────────────────
 # Configuration
@@ -128,7 +128,6 @@ with st.sidebar:
         "Session UUID",
         help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
-    retention_notice()
 
     # Display current UUID if exists
     if st.session_state.ga_uuid:
@@ -173,17 +172,11 @@ with st.sidebar:
         st.session_state.ga_uuid = new_session_id()
         st.rerun()
 
-    auto_run = st.checkbox(
-        "Auto-run prediction after upload completes",
-        value=False,
-        help="When enabled, prediction starts automatically as soon as the file finishes uploading -- no need to click Run Prediction"
-    )
-
     st.divider()
     st.subheader("Configuration")
 
     # Weight Type selector (先選擇權重類型)
-    weight_type_display = ["GA-Calibrated Weights", "Original PrediXcan Weight"]
+    weight_type_display = ["GA-Calibrated Weights", "Original PrediXcan Weights"]
     weight_type_values = ["GA_W", "PrediXcan_W"]
 
     selected_weight_col = st.radio(
@@ -237,13 +230,28 @@ with st.sidebar:
 
     # Run Analysis button (disabled if no file selected, or already running --
     # prevents a stray click from re-triggering a second overlapping run)
+    consent = retention_consent("ga_consent")
+
+    # Auto-run is only available once the retention notice is confirmed;
+    # unticking the notice also unticks auto-run.
+    if not consent:
+        st.session_state.ga_auto_run = False
+    auto_run = st.checkbox(
+        "Auto-run prediction after upload completes",
+        key="ga_auto_run",
+        disabled=not consent,
+        help="When enabled, prediction starts automatically as soon as the file finishes uploading, using the weights selected above -- no need to click Run Prediction"
+            if consent else "Confirm the data retention notice first"
+    )
+
     manual_run = st.button(
         "Run Prediction",
         width="stretch",
         type="primary",
-        disabled=not vcf_file or st.session_state.is_processing,
+        disabled=not vcf_file or not consent or st.session_state.is_processing,
         help=(
             "Select a VCF file first" if not vcf_file
+            else "Confirm the data retention notice first" if not consent
             else "Prediction already running" if st.session_state.is_processing
             else "Click to start"
         )
@@ -257,6 +265,7 @@ with st.sidebar:
 current_file_key = st.session_state.upload_seen_key
 should_auto_run = (
     auto_run
+    and consent
     and vcf_file is not None
     and current_file_key is not None
     and current_file_key != st.session_state.auto_run_done_key

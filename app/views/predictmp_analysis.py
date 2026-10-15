@@ -3,6 +3,7 @@ PredictMP Analysis - percentile rank of PrediXcan results against gnomAD v4.1 re
 """
 
 import json
+import re
 
 import streamlit as st
 import pandas as pd
@@ -11,7 +12,7 @@ from io import StringIO
 
 from core.storage import is_valid_session_id, new_session_id, session_dir
 from core.tissues import TISSUE_NAME_TO_CODE, TISSUES, POPULATION_MAP, POPULATIONS
-from ui import paginate_dataframe, retention_notice
+from ui import paginate_dataframe, retention_consent
 
 try:
     from PredictMP import rankcal
@@ -73,7 +74,6 @@ with st.sidebar:
         "Session UUID",
         help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
-    retention_notice()
 
     # Display current UUID if exists
     if st.session_state.predictmp_uuid:
@@ -109,12 +109,6 @@ with st.sidebar:
         st.session_state.predictmp_uuid = new_session_id()
         st.rerun()
 
-    auto_run = st.checkbox(
-        "Auto-run analysis after upload completes",
-        value=False,
-        help="When enabled, analysis starts automatically as soon as the file finishes uploading, using the tissue type and population selected below -- no need to click Run PredictMP"
-    )
-
     st.divider()
     st.subheader("Configuration")
 
@@ -132,13 +126,31 @@ with st.sidebar:
 
     st.divider()
 
-    run_button_disabled = not uploaded_file or not st.session_state.predictmp_uuid
+    consent = retention_consent("predictmp_consent")
+
+    # Auto-run is only available once the retention notice is confirmed;
+    # unticking the notice also unticks auto-run.
+    if not consent:
+        st.session_state.predictmp_auto_run = False
+    auto_run = st.checkbox(
+        "Auto-run analysis after upload completes",
+        key="predictmp_auto_run",
+        disabled=not consent,
+        help="When enabled, analysis starts automatically as soon as the file finishes uploading, using the tissue type and population selected above -- no need to click Run PredictMP"
+            if consent else "Confirm the data retention notice first"
+    )
+
+    run_button_disabled = not uploaded_file or not st.session_state.predictmp_uuid or not consent
     manual_run = st.button(
         "Run PredictMP",
         width="stretch",
         type="primary",
         disabled=run_button_disabled,
-        help="Select a PrediXcan result file first" if run_button_disabled else "Click to start"
+        help=(
+            "Select a PrediXcan result file first" if not uploaded_file or not st.session_state.predictmp_uuid
+            else "Confirm the data retention notice first" if not consent
+            else "Click to start"
+        )
     )
 
 # Run either when the button is clicked, or when auto-run is on and this
@@ -150,6 +162,7 @@ with st.sidebar:
 file_key = f"{uploaded_file.name}_{uploaded_file.size}" if uploaded_file else None
 should_auto_run = (
     auto_run
+    and consent
     and file_key is not None
     and st.session_state.predictmp_uuid is not None
     and file_key != st.session_state.predictmp_auto_run_done_key
@@ -160,7 +173,9 @@ run_analysis = manual_run or should_auto_run
 # Main Content
 # ─────────────────────────────────────────────────
 st.title("PredictMP")
-st.write("**Predict Multi-Population**")
+st.write("**Predict Multi-Population** (formerly PredictAP)")
+st.caption("Ranks PrediXcan-predicted gene expression against a population-specific "
+           "reference and tests for differences from NFE.")
 
 # Show file selection status (hide when running analysis)
 if uploaded_file and not run_analysis:
@@ -279,11 +294,10 @@ if st.session_state.predictmp_results:
     st.subheader(f"Predict_{results['tissue']}_{pop_display}_{timestamp}.csv")
 
     # Metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     n_subjects = df[["FID", "IID"]].drop_duplicates().shape[0]
     n_genes = df["gene"].nunique()
-    median_percentile = df["percentile.rank"].median() if "percentile.rank" in df.columns else None
     # ks.test is per gene (same for every subject), so count unique genes, not rows
     ks_significant = df.loc[df["ks.test"] == "Sig.", "gene"].nunique() if "ks.test" in df.columns else None
 
@@ -292,29 +306,49 @@ if st.session_state.predictmp_results:
     with col2:
         st.metric("Subjects", n_subjects)
     with col3:
-        if median_percentile is not None:
-            st.metric("Median percentile rank", f"{median_percentile:.1f}")
-        else:
-            st.metric("Median percentile rank", "N/A")
-    with col4:
         if ks_significant is not None:
-            st.metric("KS Significant genes", f"{ks_significant:,} / {n_genes:,}")
+            st.metric("K-S Significant genes", f"{ks_significant:,} / {n_genes:,}",
+                      help="Genes whose predicted expression distribution differs significantly "
+                           "between the selected population and NFE (Kolmogorov-Smirnov test)")
         else:
-            st.metric("KS Significant genes", "N/A (NFE reference)")
+            st.metric("K-S Significant genes", "N/A",
+                      help="NFE is the baseline population, so there is no K-S test against NFE")
 
     # Filter results
     with st.expander("Filter results", expanded=True):
-        col_filter1, col_filter2 = st.columns(2)
+        # The KS filter only applies to non-NFE results, which have a ks.test column
+        has_ks = "ks.test" in df.columns
+        if has_ks:
+            col_filter1, col_filter_ks, col_filter2 = st.columns(3)
+        else:
+            col_filter1, col_filter2 = st.columns(2)
 
-        subjects = sorted(df["IID"].unique())
+        # IID alone identifies a subject unless the same IID appears under
+        # several FIDs; in that case show and filter by "FID / IID" instead.
+        # Natural sort so NTUH2 comes before NTUH10.
+        pairs = df[["FID", "IID"]].drop_duplicates()
+        use_fid = pairs["IID"].duplicated().any()
+        subject_ids = (pairs["FID"].astype(str) + " / " + pairs["IID"].astype(str)) if use_fid else pairs["IID"].astype(str)
+        subjects = sorted(subject_ids, key=lambda s: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)])
 
         with col_filter1:
-            st.write("**Filter by Subject (IID)**")
+            st.write("**Filter by Subject (FID / IID)**" if use_fid else "**Filter by Subject (IID)**")
             selected_subject = st.selectbox(
                 "Subject",
                 ["All subjects"] + list(subjects),
                 label_visibility="collapsed"
             )
+
+        if has_ks:
+            with col_filter_ks:
+                st.markdown("**K-S test**", help="Sig. marks genes whose predicted expression distribution "
+                            "differs significantly between the selected population and NFE; "
+                            "Nonsig. marks genes whose distribution does not")
+                ks_choice = st.selectbox(
+                    "K-S test",
+                    ["All", "Sig.", "Nonsig."],
+                    label_visibility="collapsed"
+                )
 
         with col_filter2:
             st.write("**Search gene**")
@@ -327,7 +361,13 @@ if st.session_state.predictmp_results:
         # Apply filters
         filtered_df = df.copy()
         if selected_subject != "All subjects":
-            filtered_df = filtered_df[filtered_df["IID"] == selected_subject]
+            if use_fid:
+                row_ids = filtered_df["FID"].astype(str) + " / " + filtered_df["IID"].astype(str)
+            else:
+                row_ids = filtered_df["IID"].astype(str)
+            filtered_df = filtered_df[row_ids == selected_subject]
+        if has_ks and ks_choice != "All":
+            filtered_df = filtered_df[filtered_df["ks.test"] == ks_choice]
         if search_gene:
             filtered_df = filtered_df[filtered_df["gene"].str.contains(search_gene, case=False, na=False)]
 

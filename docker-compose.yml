@@ -13,7 +13,7 @@ services:
       PYTHONPATH: /app/app
       HOME: /tmp
     ports:
-      - "127.0.0.1:${PREDICTMP_WEB_PORT:-8503}:${STREAMLIT_PORT:-8501}"
+      - "${PREDICTMP_BIND_ADDRESS:-127.0.0.1}:${PREDICTMP_WEB_PORT:-8503}:${STREAMLIT_PORT:-8501}"
     volumes:
       - ${PREDICTMP_REFERENCE_DATA_HOST_PATH:?Set PREDICTMP_REFERENCE_DATA_HOST_PATH in .env}:/reference_data:ro
       - session_results:/app/session_results
