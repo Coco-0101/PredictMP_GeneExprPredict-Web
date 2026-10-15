@@ -103,6 +103,17 @@ if "auto_run_done_key" not in st.session_state:
     st.session_state.auto_run_done_key = None
 if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
+if "ga_reset_controls" not in st.session_state:
+    st.session_state.ga_reset_controls = False
+
+# After each prediction the confirmation and auto-run boxes start unticked
+# again, so every new analysis needs a fresh confirmation. Widget values can
+# only be changed before the widgets are drawn, hence the flag set by the
+# previous run.
+if st.session_state.ga_reset_controls:
+    st.session_state.ga_consent = False
+    st.session_state.ga_auto_run = False
+    st.session_state.ga_reset_controls = False
 
 # ─────────────────────────────────────────────────
 # Get available weights databases
@@ -129,10 +140,8 @@ with st.sidebar:
         help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
 
-    # Display current UUID if exists
-    if st.session_state.ga_uuid:
-        st.info(f"{st.session_state.ga_uuid}")
-        st.caption(":red[**Copy and save this UUID to reload results later.**]")
+    # Filled in once we know whether this run switches to a new UUID
+    uuid_box = st.container()
 
     uuid_input = st.text_input(
         "UUID",
@@ -160,17 +169,17 @@ with st.sidebar:
 
     # Detect a newly-completed upload (server has fully received the file)
     # and record the timestamp -- this is the earliest point in the script
-    # where we know the upload finished.
-    if vcf_file is not None:
-        file_key = f"{vcf_file.name}_{vcf_file.size}"
-        if file_key != st.session_state.upload_seen_key:
-            st.session_state.upload_seen_key = file_key
-            st.session_state.upload_seen_time = time.time()
-
-    # Auto-generate UUID when file is uploaded (if no UUID exists)
-    if vcf_file and not st.session_state.ga_uuid:
-        st.session_state.ga_uuid = new_session_id()
-        st.rerun()
+    # where we know the upload finished. Every new upload starts a new
+    # session: a fresh UUID (so earlier results are never overwritten) and no
+    # results from the previous file.
+    file_key = f"{vcf_file.name}_{vcf_file.size}" if vcf_file is not None else None
+    if file_key != st.session_state.upload_seen_key:
+        st.session_state.upload_seen_key = file_key
+        st.session_state.upload_seen_time = time.time() if file_key else None
+        if file_key:
+            st.session_state.ga_uuid = new_session_id()
+            st.session_state.ga_results = None
+            st.session_state.auto_run_done_key = None
 
     st.divider()
     st.subheader("Configuration")
@@ -272,6 +281,18 @@ should_auto_run = (
 )
 run_analysis = (manual_run or should_auto_run) and not st.session_state.is_processing
 
+# Running again in a session that already has results (another run on the same
+# file, or a reloaded UUID) moves to a new UUID so those results are kept
+if run_analysis and vcf_file:
+    if (session_dir(st.session_state.ga_uuid) / EXPR_FILE).exists():
+        st.session_state.ga_uuid = new_session_id()
+    st.session_state.ga_results = None
+
+with uuid_box:
+    if st.session_state.ga_uuid:
+        st.info(f"{st.session_state.ga_uuid}")
+        st.caption(":red[**Copy and save this UUID to reload results later.**]")
+
 if run_analysis and vcf_file:
     # The file is marked as processed (so auto-run doesn't re-trigger on every
     # rerun) only once the run finishes or fails. If the user changes a setting
@@ -288,6 +309,12 @@ Predict gene expression using GA-calibrated weights.
 """)
 
 st.info("Use the sidebar to upload analysis data, select weights configuration, and run the prediction.")
+
+# Outcome of the prediction that just finished (shown once, after the rerun
+# that resets the sidebar)
+flash = st.session_state.pop("ga_flash", None)
+if flash:
+    getattr(st, flash[0])(flash[1])
 
 # Show status message (hide when running analysis)
 if vcf_file and not run_analysis:
@@ -317,7 +344,8 @@ if run_analysis and vcf_file:
         with open(vcf_path, "wb") as f:
             f.write(vcf_file.getbuffer())
 
-        # Create pipeline with selected configuration
+        # Create pipeline with selected configuration, then run the prediction.
+        # The outcome is kept in ga_flash and shown after the rerun below.
         try:
             pipeline = GAPipeline(
                 weights_db=selected_weight_db,
@@ -325,62 +353,64 @@ if run_analysis and vcf_file:
                 weight_col=selected_weight_col,
             )
         except Exception as e:
-            st.session_state.auto_run_done_key = current_file_key
-            st.error(f"Failed to initialize pipeline: {e}")
-            st.stop()
+            pipeline = None
+            st.session_state.ga_flash = ("error", f"Failed to initialize pipeline: {e}")
 
-        # Run prediction
-        st.subheader("Processing Progress")
+        if pipeline is not None:
+            st.subheader("Processing Progress")
 
-        if st.session_state.upload_seen_time:
-            upload_ready_ago = time.time() - st.session_state.upload_seen_time
-            st.caption(f"File finished uploading {upload_ready_ago:.1f}s before prediction started")
-
-        progress_container = st.container()
-        status_text = st.empty()
-        progress_bar = st.progress(0)
-
-        pipeline_start_time = time.time()
-
-        try:
-            def update_progress(message: str, pct: int):
-                status_text.write(message)
-                progress_bar.progress(min(pct / 100, 0.99))
-
-            expr_path, summary_path = pipeline.run(
-                vcf_path=vcf_path,
-                output_dir=work_dir,
-                progress_callback=update_progress,
-                assume_aligned=False,  # Always perform allele check for safety
-            )
-            progress_bar.progress(1.0)
-
-            pipeline_elapsed = time.time() - pipeline_start_time
-            timing_note = f" (prediction took {pipeline_elapsed:.1f}s"
             if st.session_state.upload_seen_time:
-                total_elapsed = time.time() - st.session_state.upload_seen_time
-                timing_note += f", {total_elapsed:.1f}s total since upload finished"
-            timing_note += ")"
-            status_text.success(f"Prediction complete!{timing_note}")
+                upload_ready_ago = time.time() - st.session_state.upload_seen_time
+                st.caption(f"File finished uploading {upload_ready_ago:.1f}s before prediction started")
 
-            # Load results
-            expr_df, summary_df = load_results(expr_path, summary_path)
-            st.session_state.ga_results = {
-                "expr_path": expr_path,
-                "summary_path": summary_path,
-                "expr_df": expr_df,
-                "summary_df": summary_df,
-                "session_uuid": st.session_state.ga_uuid,
-            }
-            st.session_state.auto_run_done_key = current_file_key
+            status_text = st.empty()
+            progress_bar = st.progress(0)
 
-        except Exception as e:
-            st.session_state.auto_run_done_key = current_file_key
-            st.error(f"Prediction failed: {e}")
-            st.session_state.error = str(e)
-            st.stop()
+            pipeline_start_time = time.time()
+
+            try:
+                def update_progress(message: str, pct: int):
+                    status_text.write(message)
+                    progress_bar.progress(min(pct / 100, 0.99))
+
+                expr_path, summary_path = pipeline.run(
+                    vcf_path=vcf_path,
+                    output_dir=work_dir,
+                    progress_callback=update_progress,
+                    assume_aligned=False,  # Always perform allele check for safety
+                )
+                progress_bar.progress(1.0)
+
+                pipeline_elapsed = time.time() - pipeline_start_time
+                timing_note = f" (prediction took {pipeline_elapsed:.1f}s"
+                if st.session_state.upload_seen_time:
+                    total_elapsed = time.time() - st.session_state.upload_seen_time
+                    timing_note += f", {total_elapsed:.1f}s total since upload finished"
+                timing_note += ")"
+
+                # Load results
+                expr_df, summary_df = load_results(expr_path, summary_path)
+                st.session_state.ga_results = {
+                    "expr_path": expr_path,
+                    "summary_path": summary_path,
+                    "expr_df": expr_df,
+                    "summary_df": summary_df,
+                    "session_uuid": st.session_state.ga_uuid,
+                }
+                st.session_state.ga_flash = ("success", f"Prediction complete!{timing_note}")
+
+            except Exception as e:
+                st.session_state.ga_results = None
+                st.session_state.error = str(e)
+                st.session_state.ga_flash = ("error", f"Prediction failed: {e}")
     finally:
         st.session_state.is_processing = False
+
+    # Finished (either way): mark this upload as processed and redraw the page
+    # with the confirmation and auto-run boxes cleared
+    st.session_state.auto_run_done_key = current_file_key
+    st.session_state.ga_reset_controls = True
+    st.rerun()
 
 # ─────────────────────────────────────────────────
 # Try to load results from disk if UUID is set but results not in memory

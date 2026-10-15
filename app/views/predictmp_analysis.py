@@ -64,6 +64,18 @@ if "predictmp_results" not in st.session_state:
     st.session_state.predictmp_results = None
 if "predictmp_auto_run_done_key" not in st.session_state:
     st.session_state.predictmp_auto_run_done_key = None
+if "predictmp_last_file_key" not in st.session_state:
+    st.session_state.predictmp_last_file_key = None
+if "predictmp_reset_controls" not in st.session_state:
+    st.session_state.predictmp_reset_controls = False
+
+# After each analysis the confirmation and auto-run boxes start unticked again,
+# so every new analysis needs a fresh confirmation. Widget values can only be
+# changed before the widgets are drawn, hence the flag set by the previous run.
+if st.session_state.predictmp_reset_controls:
+    st.session_state.predictmp_consent = False
+    st.session_state.predictmp_auto_run = False
+    st.session_state.predictmp_reset_controls = False
 
 # ─────────────────────────────────────────────────
 # Sidebar Configuration
@@ -75,10 +87,8 @@ with st.sidebar:
         help="Leave blank to generate a new UUID for this analysis, or paste a previous UUID to reload previous results"
     )
 
-    # Display current UUID if exists
-    if st.session_state.predictmp_uuid:
-        st.info(f"{st.session_state.predictmp_uuid}")
-        st.caption(":red[**Copy and save this UUID to reload results later.**]")
+    # Filled in once we know whether this run switches to a new UUID
+    uuid_box = st.container()
 
     uuid_input = st.text_input(
         "UUID",
@@ -104,10 +114,15 @@ with st.sidebar:
         accept_multiple_files=False
     )
 
-    # Auto-generate UUID when file is uploaded (if no UUID exists)
-    if uploaded_file and not st.session_state.predictmp_uuid:
-        st.session_state.predictmp_uuid = new_session_id()
-        st.rerun()
+    # Every newly uploaded file starts a new session: a fresh UUID (so earlier
+    # results are never overwritten) and no results from the previous file
+    file_key = f"{uploaded_file.name}_{uploaded_file.size}" if uploaded_file else None
+    if file_key != st.session_state.predictmp_last_file_key:
+        st.session_state.predictmp_last_file_key = file_key
+        if file_key:
+            st.session_state.predictmp_uuid = new_session_id()
+            st.session_state.predictmp_results = None
+            st.session_state.predictmp_auto_run_done_key = None
 
     st.divider()
     st.subheader("Configuration")
@@ -159,7 +174,6 @@ with st.sidebar:
 # user changes a setting mid-run, Streamlit interrupts the run, and the rerun
 # auto-runs again with the new setting instead of silently dropping it.
 # Keys are prefixed so they do not collide with the GA page's session state.
-file_key = f"{uploaded_file.name}_{uploaded_file.size}" if uploaded_file else None
 should_auto_run = (
     auto_run
     and consent
@@ -169,6 +183,18 @@ should_auto_run = (
 )
 run_analysis = manual_run or should_auto_run
 
+# Running again in a session that already has results (another run on the same
+# file, or a reloaded UUID) moves to a new UUID so those results are kept
+if run_analysis:
+    if (session_dir(st.session_state.predictmp_uuid) / RESULT_FILE).exists():
+        st.session_state.predictmp_uuid = new_session_id()
+    st.session_state.predictmp_results = None
+
+with uuid_box:
+    if st.session_state.predictmp_uuid:
+        st.info(f"{st.session_state.predictmp_uuid}")
+        st.caption(":red[**Copy and save this UUID to reload results later.**]")
+
 # ─────────────────────────────────────────────────
 # Main Content
 # ─────────────────────────────────────────────────
@@ -176,6 +202,12 @@ st.title("PredictMP")
 st.write("**Predict Multi-Population** (formerly PredictAP)")
 st.caption("Ranks PrediXcan-predicted gene expression against a population-specific "
            "reference and tests for differences from NFE.")
+
+# Outcome of the analysis that just finished (shown once, after the rerun that
+# resets the sidebar)
+flash = st.session_state.pop("predictmp_flash", None)
+if flash:
+    getattr(st, flash[0])(flash[1])
 
 # Show file selection status (hide when running analysis)
 if uploaded_file and not run_analysis:
@@ -243,12 +275,17 @@ if run_analysis and uploaded_file:
             "uuid": st.session_state.predictmp_uuid,
             "dataframe": result_df,
         }
-        st.session_state.predictmp_auto_run_done_key = file_key
+        st.session_state.predictmp_flash = ("success", "Analysis complete!")
 
     except Exception as e:
-        st.session_state.predictmp_auto_run_done_key = file_key
-        st.error(f"Analysis failed: {str(e)}")
-        st.stop()
+        st.session_state.predictmp_results = None
+        st.session_state.predictmp_flash = ("error", f"Analysis failed: {str(e)}")
+
+    # Finished (either way): mark this upload as analysed and redraw the page
+    # with the confirmation and auto-run boxes cleared
+    st.session_state.predictmp_auto_run_done_key = file_key
+    st.session_state.predictmp_reset_controls = True
+    st.rerun()
 
 # Try to load results from disk if UUID is set but results not in memory
 if st.session_state.predictmp_uuid and not st.session_state.predictmp_results:
