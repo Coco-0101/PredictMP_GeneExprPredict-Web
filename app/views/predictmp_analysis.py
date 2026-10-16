@@ -35,6 +35,15 @@ COLUMN_DESCRIPTIONS = {
     "ks.test": "Significance indicator of the Kolmogorov-Smirnov test",
 }
 
+def format_size(n_bytes):
+    """File size with two decimals in the largest fitting unit, e.g. 412.35 KB."""
+    size = float(n_bytes)
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{n_bytes:,} bytes" if unit == "bytes" else f"{size:.2f} {unit}"
+        size /= 1024
+
+
 def get_column_descriptions(population_code):
     """Get column descriptions with dynamic population comparison"""
     descriptions = COLUMN_DESCRIPTIONS.copy()
@@ -62,8 +71,6 @@ if "predictmp_uuid" not in st.session_state:
     st.session_state.predictmp_uuid = None
 if "predictmp_results" not in st.session_state:
     st.session_state.predictmp_results = None
-if "predictmp_auto_run_done_key" not in st.session_state:
-    st.session_state.predictmp_auto_run_done_key = None
 if "predictmp_last_file_key" not in st.session_state:
     st.session_state.predictmp_last_file_key = None
 if "predictmp_reset_controls" not in st.session_state:
@@ -122,7 +129,6 @@ with st.sidebar:
         if file_key:
             st.session_state.predictmp_uuid = new_session_id()
             st.session_state.predictmp_results = None
-            st.session_state.predictmp_auto_run_done_key = None
 
     st.divider()
     st.subheader("Configuration")
@@ -168,18 +174,16 @@ with st.sidebar:
         )
     )
 
-# Run either when the button is clicked, or when auto-run is on and this
-# upload has not been analysed yet (so it does not re-run on every rerun).
-# The upload is only marked as analysed once a run finishes or fails: if the
-# user changes a setting mid-run, Streamlit interrupts the run, and the rerun
-# auto-runs again with the new setting instead of silently dropping it.
-# Keys are prefixed so they do not collide with the GA page's session state.
+# Run either when the button is clicked, or when auto-run is ticked and a file
+# is there. Auto-run does not repeat on every rerun because the boxes are
+# cleared once a run finishes or fails; if the user changes a setting mid-run,
+# Streamlit interrupts the run and the rerun auto-runs again with the new
+# setting. Keys are prefixed so they do not collide with the GA page's state.
 should_auto_run = (
     auto_run
     and consent
     and file_key is not None
     and st.session_state.predictmp_uuid is not None
-    and file_key != st.session_state.predictmp_auto_run_done_key
 )
 run_analysis = manual_run or should_auto_run
 
@@ -211,10 +215,7 @@ if flash:
 
 # Show file selection status (hide when running analysis)
 if uploaded_file and not run_analysis:
-    if auto_run:
-        st.info(f"PrediXcan result selected: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.1f} MB)\n\nAuto-run has already analysed this file. Change the settings and click **Run PredictMP** to run again.")
-    else:
-        st.info(f"PrediXcan result selected: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.1f} MB)\n\nClick **Run PredictMP** button in the sidebar to start")
+    st.info(f"PrediXcan result selected: {uploaded_file.name} ({format_size(uploaded_file.size)})\n\nClick **Run PredictMP** button in the sidebar to start")
 elif not uploaded_file and not run_analysis:
     st.info("Use the sidebar to upload analysis data, select tissue type and population, then click **Run PredictMP**.")
 
@@ -281,9 +282,8 @@ if run_analysis and uploaded_file:
         st.session_state.predictmp_results = None
         st.session_state.predictmp_flash = ("error", f"Analysis failed: {str(e)}")
 
-    # Finished (either way): mark this upload as analysed and redraw the page
-    # with the confirmation and auto-run boxes cleared
-    st.session_state.predictmp_auto_run_done_key = file_key
+    # Finished (either way): redraw the page with the confirmation and auto-run
+    # boxes cleared
     st.session_state.predictmp_reset_controls = True
     st.rerun()
 

@@ -4,7 +4,6 @@ Upload a genotype.vcf -> predict expression using GA-calibrated weights
 """
 
 import os
-import time
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -86,6 +85,15 @@ STATUS_DISPLAY_MAP = {
     },
 }
 
+def format_size(n_bytes):
+    """File size with two decimals in the largest fitting unit, e.g. 412.35 KB."""
+    size = float(n_bytes)
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{n_bytes:,} bytes" if unit == "bytes" else f"{size:.2f} {unit}"
+        size /= 1024
+
+
 # ─────────────────────────────────────────────────
 # Initialize session state
 # ─────────────────────────────────────────────────
@@ -97,10 +105,6 @@ if "error" not in st.session_state:
     st.session_state.error = None
 if "upload_seen_key" not in st.session_state:
     st.session_state.upload_seen_key = None
-if "upload_seen_time" not in st.session_state:
-    st.session_state.upload_seen_time = None
-if "auto_run_done_key" not in st.session_state:
-    st.session_state.auto_run_done_key = None
 if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
 if "ga_reset_controls" not in st.session_state:
@@ -167,19 +171,14 @@ with st.sidebar:
         accept_multiple_files=False
     )
 
-    # Detect a newly-completed upload (server has fully received the file)
-    # and record the timestamp -- this is the earliest point in the script
-    # where we know the upload finished. Every new upload starts a new
-    # session: a fresh UUID (so earlier results are never overwritten) and no
-    # results from the previous file.
+    # Every newly uploaded file starts a new session: a fresh UUID (so earlier
+    # results are never overwritten) and no results from the previous file.
     file_key = f"{vcf_file.name}_{vcf_file.size}" if vcf_file is not None else None
     if file_key != st.session_state.upload_seen_key:
         st.session_state.upload_seen_key = file_key
-        st.session_state.upload_seen_time = time.time() if file_key else None
         if file_key:
             st.session_state.ga_uuid = new_session_id()
             st.session_state.ga_results = None
-            st.session_state.auto_run_done_key = None
 
     st.divider()
     st.subheader("Configuration")
@@ -266,9 +265,9 @@ with st.sidebar:
         )
     )
 
-# Determine whether to run: either the user clicked the button, or
-# auto-run is enabled and this specific upload hasn't been processed yet.
-# Also refuse to start a new run while one is already in flight for this
+# Determine whether to run: either the user clicked the button, or auto-run
+# is ticked and a file is there. Auto-run does not repeat on every rerun
+# because the boxes are cleared once a run finishes or fails. Also refuse to start a new run while one is already in flight for this
 # UUID -- this is the key guard against duplicate/overlapping pipeline
 # runs stepping on each other's temp files.
 current_file_key = st.session_state.upload_seen_key
@@ -277,7 +276,6 @@ should_auto_run = (
     and consent
     and vcf_file is not None
     and current_file_key is not None
-    and current_file_key != st.session_state.auto_run_done_key
 )
 run_analysis = (manual_run or should_auto_run) and not st.session_state.is_processing
 
@@ -318,14 +316,10 @@ if flash:
 
 # Show status message (hide when running analysis)
 if vcf_file and not run_analysis:
-    upload_elapsed = None
-    if st.session_state.upload_seen_time:
-        upload_elapsed = time.time() - st.session_state.upload_seen_time
-    elapsed_note = f" — ready {upload_elapsed:.1f}s ago" if upload_elapsed is not None else ""
     if auto_run:
-        st.info(f"VCF file selected: **{vcf_file.name}** ({vcf_file.size / 1024 / 1024:.1f} MB){elapsed_note}\n\nAuto-run is enabled — prediction should start automatically. If it doesn't, click **Run Prediction**.")
+        st.info(f"VCF file selected: **{vcf_file.name}** ({format_size(vcf_file.size)})\n\nAuto-run is enabled — prediction should start automatically. If it doesn't, click **Run Prediction**.")
     else:
-        st.info(f"VCF file selected: **{vcf_file.name}** ({vcf_file.size / 1024 / 1024:.1f} MB){elapsed_note}\n\nClick **Run Prediction** button in the sidebar to start")
+        st.info(f"VCF file selected: **{vcf_file.name}** ({format_size(vcf_file.size)})\n\nClick **Run Prediction** button in the sidebar to start")
 
 if run_analysis and vcf_file:
     # Always release the processing lock on the way out, however this
@@ -359,14 +353,8 @@ if run_analysis and vcf_file:
         if pipeline is not None:
             st.subheader("Processing Progress")
 
-            if st.session_state.upload_seen_time:
-                upload_ready_ago = time.time() - st.session_state.upload_seen_time
-                st.caption(f"File finished uploading {upload_ready_ago:.1f}s before prediction started")
-
             status_text = st.empty()
             progress_bar = st.progress(0)
-
-            pipeline_start_time = time.time()
 
             try:
                 def update_progress(message: str, pct: int):
@@ -381,13 +369,6 @@ if run_analysis and vcf_file:
                 )
                 progress_bar.progress(1.0)
 
-                pipeline_elapsed = time.time() - pipeline_start_time
-                timing_note = f" (prediction took {pipeline_elapsed:.1f}s"
-                if st.session_state.upload_seen_time:
-                    total_elapsed = time.time() - st.session_state.upload_seen_time
-                    timing_note += f", {total_elapsed:.1f}s total since upload finished"
-                timing_note += ")"
-
                 # Load results
                 expr_df, summary_df = load_results(expr_path, summary_path)
                 st.session_state.ga_results = {
@@ -397,7 +378,7 @@ if run_analysis and vcf_file:
                     "summary_df": summary_df,
                     "session_uuid": st.session_state.ga_uuid,
                 }
-                st.session_state.ga_flash = ("success", f"Prediction complete!{timing_note}")
+                st.session_state.ga_flash = ("success", "Prediction complete!")
 
             except Exception as e:
                 st.session_state.ga_results = None
@@ -406,9 +387,8 @@ if run_analysis and vcf_file:
     finally:
         st.session_state.is_processing = False
 
-    # Finished (either way): mark this upload as processed and redraw the page
-    # with the confirmation and auto-run boxes cleared
-    st.session_state.auto_run_done_key = current_file_key
+    # Finished (either way): redraw the page with the confirmation and auto-run
+    # boxes cleared
     st.session_state.ga_reset_controls = True
     st.rerun()
 
