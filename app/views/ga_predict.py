@@ -306,20 +306,20 @@ st.markdown("""
 Predict gene expression using GA-calibrated weights.
 """)
 
-st.info("Use the sidebar to upload analysis data, select weights configuration, and run the prediction.")
-
 # Outcome of the prediction that just finished (shown once, after the rerun
 # that resets the sidebar)
 flash = st.session_state.pop("ga_flash", None)
 if flash:
     getattr(st, flash[0])(flash[1])
 
-# Show status message (hide when running analysis)
+# Show file selection status (hide when running analysis)
 if vcf_file and not run_analysis:
     if auto_run:
         st.info(f"VCF file selected: **{vcf_file.name}** ({format_size(vcf_file.size)})\n\nAuto-run is enabled — prediction should start automatically. If it doesn't, click **Run Prediction**.")
     else:
         st.info(f"VCF file selected: **{vcf_file.name}** ({format_size(vcf_file.size)})\n\nClick **Run Prediction** button in the sidebar to start")
+elif not vcf_file and not run_analysis:
+    st.info("Use the sidebar to upload analysis data, select weights configuration, then click **Run Prediction**.")
 
 if run_analysis and vcf_file:
     # Always release the processing lock on the way out, however this

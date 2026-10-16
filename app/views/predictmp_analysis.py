@@ -215,7 +215,7 @@ if flash:
 
 # Show file selection status (hide when running analysis)
 if uploaded_file and not run_analysis:
-    st.info(f"PrediXcan result selected: {uploaded_file.name} ({format_size(uploaded_file.size)})\n\nClick **Run PredictMP** button in the sidebar to start")
+    st.info(f"PrediXcan result selected: **{uploaded_file.name}** ({format_size(uploaded_file.size)})\n\nClick **Run PredictMP** button in the sidebar to start")
 elif not uploaded_file and not run_analysis:
     st.info("Use the sidebar to upload analysis data, select tissue type and population, then click **Run PredictMP**.")
 
