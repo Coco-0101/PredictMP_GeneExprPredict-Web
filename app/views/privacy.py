@@ -12,13 +12,15 @@ st.title("Privacy & Data Retention")
 
 st.markdown(f"""
 ### What we store
-- Files you upload and the results computed from them
-  are saved on our server in a folder named by a random **Session UUID**.
+- Only the **results** computed from your files are saved on our server, in a folder named by a
+  random **Session UUID**.
+- Files you upload are not kept: they stay in server memory only while your page is open (freed a
+  few minutes after you leave), and a copy made to run the analysis is deleted when it finishes.
 - We do not ask for your name, e-mail, or any account information, and we do not use cookies for tracking.
 
 ### How long we keep it
 - Every session folder is **deleted automatically {days} days** after its last activity.
-  Uploaded files and results cannot be recovered after that.
+  Results cannot be recovered after that.
 - Download any results you want to keep before then.
 
 ### Who can see it

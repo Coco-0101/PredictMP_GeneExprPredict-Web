@@ -9,8 +9,8 @@ from core.storage import RETENTION_DAYS
 def retention_consent(key: str) -> bool:
     """Checkbox the user must tick before running an analysis."""
     return st.checkbox(
-        f"I understand that uploaded files and results are deleted automatically "
-        f"after {RETENTION_DAYS:g} days.",
+        f"I understand that results are deleted automatically after {RETENTION_DAYS:g} days "
+        f"and uploaded files are not kept.",
         key=key,
         help="See *Privacy & Data Retention* for what is stored and how it is removed",
     )

@@ -322,8 +322,10 @@ elif not vcf_file and not run_analysis:
     st.info("Use the sidebar to upload analysis data, select weights configuration, then click **Run Prediction**.")
 
 if run_analysis and vcf_file:
-    # Always release the processing lock on the way out, however this
-    # block exits (success, error, or an early st.stop()).
+    # Always release the processing lock and delete the uploaded VCF on the way
+    # out, however this block exits (success, error, or an early st.stop()):
+    # only the results are kept in the session folder
+    vcf_path = None
     try:
         if not selected_weight_db:
             st.error("❌ No weights database available. Please check configuration.")
@@ -385,6 +387,8 @@ if run_analysis and vcf_file:
                 st.session_state.error = str(e)
                 st.session_state.ga_flash = ("error", f"Prediction failed: {e}")
     finally:
+        if vcf_path:
+            Path(vcf_path).unlink(missing_ok=True)
         st.session_state.is_processing = False
 
     # Finished (either way): redraw the page with the confirmation and auto-run
