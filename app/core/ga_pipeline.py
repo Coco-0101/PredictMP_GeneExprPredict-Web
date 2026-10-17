@@ -130,6 +130,7 @@ class GAPipeline:
             "--export", "A",
             "--out", output_prefix,
             "--threads", "4",
+            "--memory", "16000",  # MiB; actual use is a few GB, this just caps the workspace plink2 reserves
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)

@@ -3,7 +3,7 @@ set -euo pipefail
 
 app_path="${PREDICTMP_APP_PATH:-/app/app/main.py}"
 streamlit_port="${STREAMLIT_PORT:-8501}"
-max_upload_mb="${STREAMLIT_MAX_UPLOAD_MB:-500}"
+max_upload_mb="${STREAMLIT_MAX_UPLOAD_MB:-10240}"
 
 if ! python -c "import PredictMP" 2>/dev/null; then
     echo "PredictMP package is not installed in the image." >&2
