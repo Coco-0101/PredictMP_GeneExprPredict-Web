@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from core.upload_cleanup import start_upload_cleanup
+
+# Free uploads left in memory by closed or refreshed sessions
+start_upload_cleanup()
 
 pages = [
     st.Page(

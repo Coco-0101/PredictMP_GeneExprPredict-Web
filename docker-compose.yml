@@ -19,6 +19,9 @@ services:
       - session_results:/app/session_results
       - ./app:/app/app
       - ${GA_WEIGHTS_DB_HOST_PATH:?Set GA_WEIGHTS_DB_HOST_PATH in .env}:/ga_weights:ro
+    # Safety cap: if memory still piles up, only this container restarts instead of
+    # the whole host running out (each upload briefly needs ~2x its size in RAM)
+    mem_limit: ${PREDICTMP_MEM_LIMIT:-64g}
     restart: unless-stopped
     healthcheck:
       test:
