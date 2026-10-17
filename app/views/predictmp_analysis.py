@@ -213,10 +213,11 @@ flash = st.session_state.pop("predictmp_flash", None)
 if flash:
     getattr(st, flash[0])(flash[1])
 
-# Show file selection status (hide when running analysis)
-if uploaded_file and not run_analysis:
+# Show file selection status (hide while running and once results are shown)
+show_status = not run_analysis and not st.session_state.predictmp_results
+if uploaded_file and show_status:
     st.info(f"PrediXcan result selected: **{uploaded_file.name}** ({format_size(uploaded_file.size)})\n\nClick **Run PredictMP** button in the sidebar to start")
-elif not uploaded_file and not run_analysis:
+elif not uploaded_file and show_status:
     st.info("Use the sidebar to upload analysis data, select tissue type and population, then click **Run PredictMP**.")
 
 if run_analysis and uploaded_file:

@@ -312,13 +312,14 @@ flash = st.session_state.pop("ga_flash", None)
 if flash:
     getattr(st, flash[0])(flash[1])
 
-# Show file selection status (hide when running analysis)
-if vcf_file and not run_analysis:
+# Show file selection status (hide while running and once results are shown)
+show_status = not run_analysis and not st.session_state.ga_results
+if vcf_file and show_status:
     if auto_run:
         st.info(f"VCF file selected: **{vcf_file.name}** ({format_size(vcf_file.size)})\n\nAuto-run is enabled — prediction should start automatically. If it doesn't, click **Run Prediction**.")
     else:
         st.info(f"VCF file selected: **{vcf_file.name}** ({format_size(vcf_file.size)})\n\nClick **Run Prediction** button in the sidebar to start")
-elif not vcf_file and not run_analysis:
+elif not vcf_file and show_status:
     st.info("Use the sidebar to upload analysis data, select weights configuration, then click **Run Prediction**.")
 
 if run_analysis and vcf_file:
