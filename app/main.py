@@ -29,13 +29,31 @@ pages = [
 
 navigation = st.navigation(pages, position="sidebar")
 
-# Hide the Deploy button and the uploaders' "size per file • types" line, and
-# replace Streamlit's animated "running man" status icon with a plain spinner
+# Hide the Deploy button, show the upload limit next to each Upload button in
+# place of Streamlit's "size per file • types" line, and replace Streamlit's
+# animated "running man" status icon with a plain spinner
+max_upload_mb = st.get_option("server.maxUploadSize")
+max_upload_label = (f"Max file size: {max_upload_mb / 1024:g} GB" if max_upload_mb >= 1024
+                    else f"Max file size: {max_upload_mb:g} MB")
 st.html("""
 <style>
     [data-testid="stAppDeployButton"],
-    [data-testid="stFileUploaderDropzoneInstructions"] {
+    [data-testid="stFileUploaderDropzoneInstructions"] > div {
         display: none !important;
+    }
+    [data-testid="stFileUploaderDropzone"] {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.75rem;
+    }
+    [data-testid="stFileUploaderDropzoneInstructions"] {
+        margin: 0 !important;
+    }
+    [data-testid="stFileUploaderDropzoneInstructions"]::after {
+        content: "MAX_UPLOAD_LABEL";
+        font-size: 0.875rem;
+        opacity: 0.6;
+        white-space: nowrap;
     }
     [data-testid="stStatusWidgetRunningIcon"] > * {
         display: none !important;
@@ -55,6 +73,6 @@ st.html("""
         to { transform: rotate(360deg); }
     }
 </style>
-""")
+""".replace("MAX_UPLOAD_LABEL", max_upload_label))
 
 navigation.run()

@@ -166,7 +166,7 @@ with st.sidebar:
 
     st.subheader("Input")
     vcf_file = st.file_uploader(
-        "Upload VCF genotype file (.vcf / .vcf.gz)",
+        "Upload VCF genotype file with rsIDs (.vcf / .vcf.gz)",
         type=["vcf", "gz"],
         accept_multiple_files=False
     )
