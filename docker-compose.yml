@@ -1,0 +1,40 @@
+name: predictmp_geneexprpredict-web
+
+services:
+  predictmp_geneexprpredict-web:
+    build: .
+    image: predictmp_geneexprpredict-web:latest
+    container_name: predictmp_geneexprpredict-web
+    # Non-root: a public site should not run as root; host data on NFS is readable as this user
+    user: "${PREDICTMP_UID:-1009}:${PREDICTMP_GID:-100}"
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app/app
+      HOME: /tmp
+    ports:
+      - "${PREDICTMP_BIND_ADDRESS:-127.0.0.1}:${PREDICTMP_WEB_PORT:-8503}:${STREAMLIT_PORT:-8501}"
+    volumes:
+      - ${PREDICTMP_REFERENCE_DATA_HOST_PATH:?Set PREDICTMP_REFERENCE_DATA_HOST_PATH in .env}:/reference_data:ro
+      - session_results:/app/session_results
+      - ./app:/app/app
+      - ${GA_WEIGHTS_DB_HOST_PATH:?Set GA_WEIGHTS_DB_HOST_PATH in .env}:/ga_weights:ro
+    # Safety cap: if memory still piles up, only this container restarts instead of
+    # the whole host running out (each upload briefly needs ~2x its size in RAM)
+    mem_limit: ${PREDICTMP_MEM_LIMIT:-64g}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os, urllib.request;
+          urllib.request.urlopen('http://localhost:' + os.environ['STREAMLIT_PORT'] + '/_stcore/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  # Uploads and results live on local disk (not NFS), readable only by root on the host
+  session_results:
+    name: predictmp_geneexprpredict-web_session_results
